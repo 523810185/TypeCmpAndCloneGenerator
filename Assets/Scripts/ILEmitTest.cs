@@ -363,6 +363,86 @@ public class ILEmitTest : MonoBehaviour
 
         this.cmp = TypeUtility.GetTypeCmp<List<AAAType>>();
         this.clone = TypeUtility.GetTypeClone<List<AAAType>>();
+
+        CompareTime();
+    }
+
+    public class TestClass
+    {
+        public int x;
+        public string str = "testStr";
+    }
+
+    private void CompareTime()
+    {
+        int cnt = 10000000;
+
+        var a = new TestClass();
+        var b = new TestClass();
+        System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
+        sw.Start();
+        var clone = TypeUtility.GetTypeClone<TestClass>();
+        var cmp = TypeUtility.GetTypeCmp<TestClass>();
+        sw.Stop();
+        Debug.Log("ILEmit生成回调时间：" + sw.ElapsedMilliseconds + " ms");
+
+        Debug.LogWarning("------深拷贝1e7次------");
+
+        sw.Restart();
+        for (int i=0;i<cnt;i++)
+        {
+            a.x = b.x;
+            a.str = b.str;
+        }
+        sw.Stop();
+        Debug.Log("手写代码：" + sw.ElapsedMilliseconds + " ms");
+
+        var type = typeof(TestClass);
+        var xInfo = type.GetField("x");
+        var strInfo = type.GetField("str");
+        sw.Restart();
+        for (int i = 0; i < cnt; i++)
+        {
+            xInfo.SetValue(a, b.x);
+            strInfo.SetValue(a, b.str);
+        }
+        sw.Stop();
+        Debug.Log("纯反射设置属性：" + sw.ElapsedMilliseconds + " ms");
+
+        sw.Restart();
+        for (int i = 0; i < cnt; i++)
+        {
+            clone(a, b);
+        }
+        sw.Stop();
+        Debug.Log("ILEmit深拷贝：" + sw.ElapsedMilliseconds + " ms");
+
+        Debug.LogWarning("------逐字段比较1e7次------");
+        sw.Restart();
+        for (int i = 0; i < cnt; i++)
+        {
+            if (a.x == b.x) ;
+            if (a.str == b.str) ;
+        }
+        sw.Stop();
+        Debug.Log("手写代码：" + sw.ElapsedMilliseconds + " ms");
+
+        sw.Restart();
+        for (int i = 0; i < cnt; i++)
+        {
+            if (xInfo.GetValue(a) == xInfo.GetValue(b)) ;
+            if (strInfo.GetValue(a) == strInfo.GetValue(b)) ;
+        }
+        sw.Stop();
+        Debug.Log("纯反射比较属性：" + sw.ElapsedMilliseconds + " ms");
+
+        sw.Restart();
+        for (int i = 0; i < cnt; i++)
+        {
+            if (cmp(a, b)) ;
+        }
+        sw.Stop();
+        Debug.Log("ILEmit比较属性：" + sw.ElapsedMilliseconds + " ms");
     }
 
     public void ZZY(AAAType type1, AAAType type2)
@@ -540,11 +620,11 @@ TR_0024:
     void Update()
     {
         // isSame = cmp(aaa, bbb);
-        if(cmp(aaa, bbb) == false)
+        /*if(cmp(aaa, bbb) == false)
         {
             Debug.Log("不同了！");
             clone(aaa, bbb);
-        }
+        }*/
         // ZZY(aaa, bbb);
         // qqq = www;
     }
