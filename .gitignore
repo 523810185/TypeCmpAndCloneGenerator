@@ -1,0 +1,8 @@
+.vsconfig
+TypeCmpAndCloneGenerator.sln
+Library/
+Temp/
+obj/Debug/Assembly-CSharp.csproj.AssemblyReference.cache
+.vs/TypeCmpAndCloneGenerator/v16/.suo
+obj/Debug/DesignTimeResolveAssemblyReferencesInput.cache
+Assembly-CSharp.csproj
