@@ -71,6 +71,7 @@ namespace ILUtility
             il.MarkLabel(innerForLabel);
             {
                 // il.Emit(OpCodes.Ldloc, idList0);
+                // il.Emit(OpCodes.Ldloc, idList0);
                 // il.Emit(OpCodes.Callvirt, listGetCountMethod);
                 // il.Emit(OpCodes.Ldc_I4_1);
                 // il.Emit(OpCodes.Sub);

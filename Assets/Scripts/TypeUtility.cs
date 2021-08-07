@@ -134,27 +134,20 @@ namespace W3.TypeExtension
         /// <returns></returns>
         public static Func<T, T, bool> GetTypeCmp<T>()
         {
-            Type type = typeof(T);
             object cmpObj = null;
-            if(m_mapTypeCmpCache.TryGetValue(type, out cmpObj)) 
+            Type type = typeof(T);
+            if (m_mapTypeCmpCache.TryGetValue(type, out cmpObj)) 
             {
                 return cmpObj as Func<T, T, bool>;
             }
-
-            // // TODO.. 如果是基本类型或者string或者Unity类型，应该直接返回一个Action即可，不需要IL
-            // if(type.IsBasicType() || type == typeof(string) || type.IsUnityType())
-            // {
-            //     Debug.LogErrorFormat("暂不支持这种类型的比较器，请直接比较，Type = {0}", type);
-            //     return null;
-            // }
 
             var dm = new DynamicMethod("", typeof(bool), new Type[]{type, type});
             var il = dm.GetILGenerator();
             Label lbFalse = il.DefineLabel();
             Label lbRet = il.DefineLabel();
+            int localVarInt = 0; // 记录局部变量使用的id
+            var idForAns = localVarInt++;
             LocalBuilder localBool = il.DeclareLocal(typeof(bool)); // For ans
-            int localVarInt = 1; // 记录局部变量使用的id
-            // debug
 
             /// <summary>
             /// 加载参数0
@@ -170,30 +163,14 @@ namespace W3.TypeExtension
             {
                 il.Emit(OpCodes.Ldarg_1);
             }
+            /// <summary>
+            /// 递归加载参数0
+            /// </summary>
+            /// <param name="ilCtxList"></param>
             void RecursiveLoadParm0(List<ILCtxItem> ilCtxList)
             {
                 if(ilCtxList != null) 
                 {
-                    Debug.Log(" ------------- 解析参数0 start");
-                    // 加载参数0，并获取对应field
-                    // LoadParm0();
-                    // foreach (var item in ilCtxList)
-                    // {
-                    //     if(item.opCodes == OpCodes.Ldfld) 
-                    //     {
-                    //         Debug.Log("Ldfld, " + item.fi.Name);
-                    //         il.Emit(OpCodes.Ldfld, item.fi); 
-                    //     }
-                    //     else if(item.opCodes == OpCodes.Ldloc) 
-                    //     {
-                    //         Debug.Log("Ldloc, " + item.varID0);
-                    //         il.Emit(item.opCodes, item.varID0);
-                    //     }
-                    //     else 
-                    //     {
-                    //         Debug.LogErrorFormat("RecursiveLoadParm0 上下文item中混入了 无法解析的OpCodes：{0}", item.opCodes);
-                    //     }
-                    // }
                     int lastLoadLocInt = -1;
                     for(int i=ilCtxList.Count-1;i>=0;i--) 
                     {
@@ -226,12 +203,10 @@ namespace W3.TypeExtension
                             var item = ilCtxList[i];
                             if(item.opCodes == OpCodes.Ldfld) 
                             {
-                                Debug.Log("Ldfld, " + item.fi.Name);
                                 il.Emit(OpCodes.Ldfld, item.fi); 
                             }
                             else if(item.opCodes == OpCodes.Ldloc) 
                             {
-                                Debug.Log("Ldloc, " + item.varID0);
                                 il.Emit(item.opCodes, item.varID0);
                             }
                             else 
@@ -240,30 +215,17 @@ namespace W3.TypeExtension
                             }
                         }
                     }
-                    Debug.Log(" ------------- 解析参数0 end");
                 }
             }
+            /// <summary>
+            /// 递归加载参数1
+            /// </summary>
+            /// <param name="ilCtxList"></param>
             void RecursiveLoadParm1(List<ILCtxItem> ilCtxList)
             {
                 if(ilCtxList != null) 
                 {
                     // 加载参数1，并获取对应field
-                    // LoadParm1();
-                    // foreach (var item in ilCtxList)
-                    // {
-                    //     if(item.opCodes == OpCodes.Ldfld) 
-                    //     {
-                    //         il.Emit(OpCodes.Ldfld, item.fi); 
-                    //     }
-                    //     else if(item.opCodes == OpCodes.Ldloc) 
-                    //     {
-                    //         il.Emit(item.opCodes, item.varID1);
-                    //     }
-                    //     else 
-                    //     {
-                    //         Debug.LogErrorFormat("RecursiveLoadParm1 上下文item中混入了 无法解析的OpCodes：{0}", item.opCodes);
-                    //     }
-                    // }
                     int lastLoadLocInt = -1;
                     for(int i=ilCtxList.Count-1;i>=0;i--) 
                     {
@@ -284,7 +246,7 @@ namespace W3.TypeExtension
                             }
                             else 
                             {
-                                Debug.LogErrorFormat("RecursiveLoadParm0 上下文item中混入了 无法解析的OpCodes：{0}", item.opCodes);
+                                Debug.LogErrorFormat("RecursiveLoadParm1 上下文item中混入了 无法解析的OpCodes：{0}", item.opCodes);
                             }
                         }
                     }
@@ -303,7 +265,7 @@ namespace W3.TypeExtension
                             }
                             else 
                             {
-                                Debug.LogErrorFormat("RecursiveLoadParm0 上下文item中混入了 无法解析的OpCodes：{0}", item.opCodes);
+                                Debug.LogErrorFormat("RecursiveLoadParm1 上下文item中混入了 无法解析的OpCodes：{0}", item.opCodes);
                             }
                         }
                     }
@@ -323,7 +285,11 @@ namespace W3.TypeExtension
                 // 如果不同，则跳到lbFalse
                 il.Emit(OpCodes.Brfalse, lbFalse);
             }
-
+            /// <summary>
+            /// 比较某一个field，这个field中包含或者父类中包含 op_Equality
+            /// </summary>
+            /// <param name="nowType"></param>
+            /// <param name="ilCtxList"></param>
             void GenerateHaveOpEqualType(Type nowType, List<ILCtxItem> ilCtxList)
             {
                 // 加载参数0，并获取对应field
@@ -340,7 +306,11 @@ namespace W3.TypeExtension
                 // 如果不同，则跳到lbFalse
                 il.Emit(OpCodes.Brfalse, lbFalse);
             }
-
+            /// <summary>
+            /// 比较某一个field，这个field中重写了 T Equals(T)
+            /// </summary>
+            /// <param name="nowType"></param>
+            /// <param name="ilCtxList"></param>
             void GenerateCanEqualType(Type nowType, List<ILCtxItem> ilCtxList)
             {
                 // 加载参数0，并获取对应field
@@ -365,14 +335,17 @@ namespace W3.TypeExtension
             {
                 foreach (var field in nowType.GetFields(BindingFlags.Public | BindingFlags.Instance))
                 {
-                    // Debug.Log(nowFi.Name + " 中的 " + field.Name);
                     var ilCtxItem = new ILCtxItem(); ilCtxItem.opCodes = OpCodes.Ldfld; ilCtxItem.fi = field;
                     ilCtxList.Add(ilCtxItem);
                     GenerateField(field.FieldType, ilCtxList);
                     ilCtxList.RemoveAt(ilCtxList.Count - 1);
                 }
             }
-
+            /// <summary>
+            /// 生成一个List或者Array类型的field
+            /// </summary>
+            /// <param name="listType"></param>
+            /// <param name="ilCtxList"></param>
             void GenerateList(Type listType, List<ILCtxItem> ilCtxList) 
             {
                 var itemType = listType.GetListElementType();
@@ -393,8 +366,6 @@ namespace W3.TypeExtension
                 il.DeclareLocal(typeof(int));
                 var idList1Cnt = localVarInt++;
                 il.DeclareLocal(typeof(int));
-                var idForI = localVarInt++;
-                il.DeclareLocal(typeof(int));
                 var idItem0 = localVarInt++;
                 il.DeclareLocal(itemType);
                 var idItem1 = localVarInt++;
@@ -403,9 +374,6 @@ namespace W3.TypeExtension
                 var endLabel = il.DefineLabel();
                 var cmpSecondListNullLabel = il.DefineLabel();
                 var endFinishCmpListNullLabel = il.DefineLabel();
-                var cmpItemLabel = il.DefineLabel();
-                var iPPLabel = il.DefineLabel(); // for 的 i++
-                var iIsLessCntLabel = il.DefineLabel(); // for 的 i < cnt
 
                 // 初始化变量
                 il.Emit(OpCodes.Ldc_I4_0);
@@ -475,47 +443,30 @@ namespace W3.TypeExtension
                 il.Emit(OpCodes.Brfalse, lbFalse); // 不相同直接结束cmp
 
                 // 开始for递归比较
-                // i = 0
-                il.Emit(OpCodes.Ldc_I4_0);
-                il.Emit(OpCodes.Stloc, idForI);
-                il.Emit(OpCodes.Br, iIsLessCntLabel);
-                // 内部item比较代码
-                il.MarkLabel(cmpItemLabel);
-                {
-                    var listGetItemMethod = listType.GetMethod("get_Item");
-                    // 存储item0
-                    il.Emit(OpCodes.Ldloc, idList0);
-                    il.Emit(OpCodes.Ldloc, idForI);
-                    il.Emit(OpCodes.Callvirt, listGetItemMethod);
-                    il.Emit(OpCodes.Stloc, idItem0);
-                    // 存储item1
-                    il.Emit(OpCodes.Ldloc, idList1);
-                    il.Emit(OpCodes.Ldloc, idForI);
-                    il.Emit(OpCodes.Callvirt, listGetItemMethod);
-                    il.Emit(OpCodes.Stloc, idItem1);
-                    // 构建item上下文
-                    var ilCtxItem = new ILCtxItem(); ilCtxItem.opCodes = OpCodes.Ldloc; ilCtxItem.varID0 = idItem0; ilCtxItem.varID1 = idItem1;
-                    ilCtxList.Add(ilCtxItem);
-                    // 递归解析
-                    GenerateField(itemType, ilCtxList);
-                    ilCtxList.RemoveAt(ilCtxList.Count - 1);
-                }
-                // i++
-                il.MarkLabel(iPPLabel);
-                {
-                    il.Emit(OpCodes.Ldloc, idForI);
-                    il.Emit(OpCodes.Ldc_I4_1);
-                    il.Emit(OpCodes.Add);
-                    il.Emit(OpCodes.Stloc, idForI);
-                }
-                // i < cnt
-                il.MarkLabel(iIsLessCntLabel);
-                {
-                    il.Emit(OpCodes.Ldloc, idForI);
-                    il.Emit(OpCodes.Ldloc, idList0Cnt);
-                    il.Emit(OpCodes.Clt);
-                    il.Emit(OpCodes.Brtrue, cmpItemLabel); // 如果 i < cnt 则进入内部for
-                }
+                il.GenFor(
+                    () => {
+                        il.Emit(OpCodes.Ldloc, idList0Cnt);
+                    }, 
+                    (idLoopIter) => {
+                        var listGetItemMethod = listType.GetMethod("get_Item");
+                        // 存储item0
+                        il.Emit(OpCodes.Ldloc, idList0);
+                        il.Emit(OpCodes.Ldloc, idLoopIter);
+                        il.Emit(OpCodes.Callvirt, listGetItemMethod);
+                        il.Emit(OpCodes.Stloc, idItem0);
+                        // 存储item1
+                        il.Emit(OpCodes.Ldloc, idList1);
+                        il.Emit(OpCodes.Ldloc, idLoopIter);
+                        il.Emit(OpCodes.Callvirt, listGetItemMethod);
+                        il.Emit(OpCodes.Stloc, idItem1);
+                        // 构建item上下文
+                        var ilCtxItem = new ILCtxItem(); ilCtxItem.opCodes = OpCodes.Ldloc; ilCtxItem.varID0 = idItem0; ilCtxItem.varID1 = idItem1;
+                        ilCtxList.Add(ilCtxItem);
+                        // 递归解析
+                        GenerateField(itemType, ilCtxList);
+                        ilCtxList.RemoveAt(ilCtxList.Count - 1);
+                    },
+                    ref localVarInt);
 
                 // 结束标签
                 il.MarkLabel(endLabel);
@@ -565,21 +516,12 @@ namespace W3.TypeExtension
                 }
             }
 
-            // var fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance);
-            // foreach (var field in fields)
-            // {
-            //     Debug.Log(field);
-            //     var ilCtxList = new List<ILCtxItem>();
-            //     var ilCtxItem = new ILCtxItem(); ilCtxItem.opCodes = OpCodes.Ldfld; ilCtxItem.fi = field;
-            //     ilCtxList.Add(ilCtxItem);
-            //     GenerateField(field.FieldType, ilCtxList);
-            // }
             GenerateField(type, new List<ILCtxItem>());
 
             // 默认压入true作为返回值
             {
                 il.Emit(OpCodes.Ldc_I4_1);
-                il.Emit(OpCodes.Stloc_0);
+                il.Emit(OpCodes.Stloc, idForAns);
                 // 直接往lbRet跳，以免被赋值false
                 il.Emit(OpCodes.Br, lbRet);
             }
@@ -587,7 +529,7 @@ namespace W3.TypeExtension
             {
                 il.MarkLabel(lbFalse);
                 il.Emit(OpCodes.Ldc_I4_0);
-                il.Emit(OpCodes.Stloc_0);
+                il.Emit(OpCodes.Stloc, idForAns);
                 il.Emit(OpCodes.Br, lbRet);
             }
             // 退出代码
@@ -619,18 +561,14 @@ namespace W3.TypeExtension
 
             var dm = new DynamicMethod("", null, new Type[]{type, type});
             var il = dm.GetILGenerator();
-            Label lbFalse = il.DefineLabel();
             Label lbRet = il.DefineLabel();
-            LocalBuilder localBool = il.DeclareLocal(typeof(bool)); // For ans
-            int localVarInt = 1; // 记录局部变量使用的id
-            // debug
+            int localVarInt = 0; // 记录局部变量使用的id
 
             /// <summary>
             /// 加载参数0
             /// </summary>
             void LoadParm0()
             {
-                Debug.Log("Ldarg_0");
                 il.Emit(OpCodes.Ldarg_0);
             }
             /// <summary>
@@ -638,216 +576,130 @@ namespace W3.TypeExtension
             /// </summary>
             void LoadParm1()
             {
-                Debug.Log("Ldarg_1");
                 il.Emit(OpCodes.Ldarg_1);
             }
+            /// <summary>
+            /// 为普通field赋值
+            /// </summary>
+            /// <param name="fi"></param>
             void MakeSetField(FieldInfo fi) 
             {
                 if(fi != null) 
                 {
-                    Debug.Log("Ldfld " + fi);
                     il.Emit(OpCodes.Ldfld, fi);
-                    Debug.Log("Stfld " + fi);
                     il.Emit(OpCodes.Stfld, fi);
                 }
             }
+            /// <summary>
+            /// 为List或者数组的item赋值
+            /// </summary>
+            /// <param name="getItemMI"></param>
+            /// <param name="setItemMI"></param>
             void MakeSetItem(MethodInfo getItemMI, MethodInfo setItemMI) 
             {
-                Debug.Log("Callvirt " + getItemMI);
                 il.Emit(OpCodes.Callvirt, getItemMI);
-                Debug.Log("Callvirt " + setItemMI);
                 il.Emit(OpCodes.Callvirt, setItemMI);
             }
+            /// <summary>
+            /// 递归加载参数0
+            /// </summary>
+            /// <param name="ilCtxList"></param>
+            /// <param name="ignoreLast"></param>
             void RecursiveLoadParm0(List<ILCtxItem> ilCtxList, bool ignoreLast = true)
             {
                 LoadParm0();
                 if(ilCtxList != null && ilCtxList.Count > 0) 
                 {
                     // 加载参数0，并获取对应field
-                    int lastLoadLocInt = -1;
                     var cnt = ilCtxList.Count - (ignoreLast ? 1 : 0);
-                    // for(int i=cnt-1;i>=0;i--) 
-                    // {
-                    //     if(ilCtxList[i].opCodes == OpCodes.Ldloc) 
-                    //     {
-                    //         lastLoadLocInt = i;
-                    //         break;
-                    //     }
-                    // }
-                    if(lastLoadLocInt == -1) 
+                    for (int i = 0; i < cnt; i++)
                     {
-                        // LoadParm0();
-                        for(int i=0;i<cnt;i++)
+                        var item = ilCtxList[i];
+                        if (item.opCodes == OpCodes.Ldfld)
                         {
-                            var item = ilCtxList[i];
-                            if(item.opCodes == OpCodes.Ldfld) 
-                            {
-                                Debug.Log("Ldfld, " + item.fi.Name);
-                                il.Emit(OpCodes.Ldfld, item.fi); 
-                            }
-                            else if(item.opCodes == OpCodes.Ldloc)
-                            {
-                                Debug.Log("Ldloc, " + item.varID0);
-                                il.Emit(OpCodes.Ldloc, item.varID0); 
-                            }
-                            else if(item.opCodes == OpCodes.Callvirt) 
-                            {
-                                Debug.Log("Callvirt, " + item.mi);
-                                il.Emit(OpCodes.Callvirt, item.mi); 
-                            }
-                            else 
-                            {
-                                Debug.LogErrorFormat("RecursiveLoadParm0 上下文item中混入了 无法解析的OpCodes：{0}", item.opCodes);
-                            }
+                            il.Emit(OpCodes.Ldfld, item.fi);
                         }
-                    }
-                    else 
-                    {
-                        for(int i=lastLoadLocInt;i<cnt;i++)
+                        else if (item.opCodes == OpCodes.Ldloc)
                         {
-                            var item = ilCtxList[i];
-                            if(item.opCodes == OpCodes.Ldfld) 
-                            {
-                                Debug.Log("Ldfld, " + item.fi.Name);
-                                il.Emit(OpCodes.Ldfld, item.fi); 
-                            }
-                            else if(item.opCodes == OpCodes.Ldloc) 
-                            {
-                                Debug.Log("Ldloc, " + item.varID0);
-                                // il.Emit(item.opCodes, item.varID0);
-                            }
-                            else 
-                            {
-                                Debug.LogErrorFormat("RecursiveLoadParm0 上下文item中混入了 无法解析的OpCodes：{0}", item.opCodes);
-                            }
+                            il.Emit(OpCodes.Ldloc, item.varID0);
                         }
-                    }
-                }
-            }
-            void RecursiveLoadParm1(List<ILCtxItem> ilCtxList, bool ignoreLast = true)
-            {
-                LoadParm1();
-                if(ilCtxList != null && ilCtxList.Count > 0) 
-                {
-                    int lastLoadLocInt = -1;
-                    var cnt = ilCtxList.Count - (ignoreLast ? 1 : 0);
-                    // for(int i=cnt-1;i>=0;i--) 
-                    // {
-                    //     if(ilCtxList[i].opCodes == OpCodes.Ldloc) 
-                    //     {
-                    //         lastLoadLocInt = i;
-                    //         break;
-                    //     }
-                    // }
-                    if(lastLoadLocInt == -1) 
-                    {
-                        // LoadParm1();
-                        for(int i=0;i<cnt;i++)
+                        else if (item.opCodes == OpCodes.Callvirt)
                         {
-                            var item = ilCtxList[i];
-                            if(item.opCodes == OpCodes.Ldfld) 
-                            {
-                                Debug.Log("Ldfld, " + item.fi.Name);
-                                il.Emit(OpCodes.Ldfld, item.fi); 
-                            }
-                            else if(item.opCodes == OpCodes.Ldloc)
-                            {
-                                Debug.Log("Ldloc, " + item.varID1);
-                                il.Emit(OpCodes.Ldloc, item.varID1); 
-                            }
-                            else if(item.opCodes == OpCodes.Callvirt) 
-                            {
-                                Debug.Log("Callvirt, " + item.mi);
-                                il.Emit(OpCodes.Callvirt, item.mi); 
-                            }
-                            else 
-                            {
-                                Debug.LogErrorFormat("RecursiveLoadParm1 上下文item中混入了 无法解析的OpCodes：{0}", item.opCodes);
-                            }
+                            il.Emit(OpCodes.Callvirt, item.mi);
                         }
-                    }
-                    else 
-                    {
-                        for(int i=lastLoadLocInt;i<cnt;i++)
+                        else
                         {
-                            var item = ilCtxList[i];
-                            if(item.opCodes == OpCodes.Ldfld) 
-                            {
-                                il.Emit(OpCodes.Ldfld, item.fi); 
-                            }
-                            else if(item.opCodes == OpCodes.Ldloc) 
-                            {
-                                il.Emit(item.opCodes, item.varID1);
-                            }
-                            else 
-                            {
-                                Debug.LogErrorFormat("RecursiveLoadParm0 上下文item中混入了 无法解析的OpCodes：{0}", item.opCodes);
-                            }
+                            Debug.LogErrorFormat("RecursiveLoadParm0 上下文item中混入了 无法解析的OpCodes：{0}", item.opCodes);
                         }
                     }
                 }
             }
             /// <summary>
-            /// 比较某一个field，这个field是基本类型的
+            /// 递归加载参数1
             /// </summary>
-            void GenerateBasicType(List<ILCtxItem> ilCtxList)
+            /// <param name="ilCtxList"></param>
+            /// <param name="ignoreLast"></param>
+            void RecursiveLoadParm1(List<ILCtxItem> ilCtxList, bool ignoreLast = true)
             {
-                // 加载参数0，并获取对应field
-                RecursiveLoadParm0(ilCtxList);
-                // 加载参数1，并获取对应field
-                RecursiveLoadParm1(ilCtxList);
-                // 作比较
-                il.Emit(OpCodes.Ceq);
-                // 如果不同，则跳到lbFalse
-                il.Emit(OpCodes.Brfalse, lbFalse);
+                LoadParm1();
+                if(ilCtxList != null && ilCtxList.Count > 0) 
+                {
+                    var cnt = ilCtxList.Count - (ignoreLast ? 1 : 0);
+                    for (int i = 0; i < cnt; i++)
+                    {
+                        var item = ilCtxList[i];
+                        if (item.opCodes == OpCodes.Ldfld)
+                        {
+                            il.Emit(OpCodes.Ldfld, item.fi);
+                        }
+                        else if (item.opCodes == OpCodes.Ldloc)
+                        {
+                            il.Emit(OpCodes.Ldloc, item.varID1);
+                        }
+                        else if (item.opCodes == OpCodes.Callvirt)
+                        {
+                            il.Emit(OpCodes.Callvirt, item.mi);
+                        }
+                        else
+                        {
+                            Debug.LogErrorFormat("RecursiveLoadParm1 上下文item中混入了 无法解析的OpCodes：{0}", item.opCodes);
+                        }
+                    }
+                }
             }
-
+            /// <summary>
+            /// 生成一个可以直接 用 = 赋值 的 field
+            /// </summary>
+            /// <param name="ilCtxList"></param>
             void GenerateStraightSetType(List<ILCtxItem> ilCtxList)
             {
                 if(ilCtxList != null && ilCtxList.Count > 0) 
                 {
-                    Debug.Log(" ------------------- GenerateStraightSetType start");
                     // 加载参数0，并获取对应field
                     RecursiveLoadParm0(ilCtxList);
                     // 加载参数1，并获取对应field
                     RecursiveLoadParm1(ilCtxList);
                     // Set
                     var lastItem = ilCtxList[ilCtxList.Count - 1];
+                    // 如果最后一个上下文是Ldfld，说明是为一个field赋值
                     if(lastItem.opCodes == OpCodes.Ldfld) 
                     {
                         MakeSetField(lastItem.fi);
                     }
+                    // 否则如果最后一个上下文是Callvirt，说明是为数组中的某一个item赋值
                     else if(lastItem.opCodes == OpCodes.Callvirt)
                     {
                         MakeSetItem(lastItem.mi, lastItem.miex);
                     }
-                    Debug.Log(" ------------------- GenerateStraightSetType end");
                 }
                 else 
                 {
                     // 没有上下文，说明需要的Clone就是直接拷贝
+                    // 这里代表的是最顶层的直接赋值（无意义），TODO.. 通过加上ref来使得参数能被正确赋值
                     il.Emit(OpCodes.Ldarg_1);
                     il.Emit(OpCodes.Starg, 0);
                 }
             }
-
-            void GenerateCanEqualType(Type nowType, List<ILCtxItem> ilCtxList)
-            {
-                // 加载参数0，并获取对应field
-                RecursiveLoadParm0(ilCtxList);
-                // 加载参数1，并获取对应field
-                RecursiveLoadParm1(ilCtxList);
-                // 获取比较函数
-                var opMethod = nowType.GetCurTypeEqualsMethodInfo();
-                il.Emit(OpCodes.Callvirt, opMethod);
-                // 比较结果和true作比较
-                il.Emit(OpCodes.Ldc_I4_1);
-                // 作比较
-                il.Emit(OpCodes.Ceq);
-                // 如果不同，则跳到lbFalse
-                il.Emit(OpCodes.Brfalse, lbFalse);
-            }
-
             /// <summary>
             /// 比较一个class类型的field
             /// </summary>
@@ -862,7 +714,11 @@ namespace W3.TypeExtension
                     ilCtxList.RemoveAt(ilCtxList.Count - 1);
                 }
             }
-
+            /// <summary>
+            /// 生成一个List或者数组类型的field
+            /// </summary>
+            /// <param name="listType"></param>
+            /// <param name="ilCtxList"></param>
             void GenerateList(Type listType, List<ILCtxItem> ilCtxList) 
             {
                 var itemType = listType.GetListElementType();
@@ -894,9 +750,6 @@ namespace W3.TypeExtension
                 // 定义标签
                 var endLabel = il.DefineLabel();
                 var list0IsNullLabel = il.DefineLabel();
-                var cmpItemLabel = il.DefineLabel();
-                var iPPLabel = il.DefineLabel(); // for 的 i++
-                var iIsLessCntLabel = il.DefineLabel(); // for 的 i < cnt
                 var beginSetLabel = il.DefineLabel(); // 开始设置List
                 var beginForLabel = il.DefineLabel(); // 开始for
                 // method
@@ -914,7 +767,8 @@ namespace W3.TypeExtension
                 if(nowField == null) 
                 {
                     // Debug.LogErrorFormat("暂不支持最外层是List的结构，Type = {0}", listType);
-                    // 特殊逻辑
+                    // TODO.. 为参数0带上ref标记，使得即使其在null相关的操作时能被正确赋值
+                    // 特殊逻辑（最外层就是List）
                     var _cmpSecondParmIsNullLabel = il.DefineLabel();
                     LoadParm0();
                     il.Emit(OpCodes.Ldnull);
@@ -1023,26 +877,8 @@ namespace W3.TypeExtension
                     // 使得两个list的数目相同
                     var itemctor = itemType.GetConstructor(new Type[]{});
                     // 注意，不能直接拿原来的变量，因为可能之前的局部变量是null，现在新建过了，因此现在要重新获取list
-                    // if(nowField != null) 
-                    // {
-                    //     RecursiveLoadParm0(ilCtxList, false);
-                    // }
-                    // else 
-                    // {
-                    //     // TODO.. 合并到上面的方法
-                    //     LoadParm0();
-                    // }
                     RecursiveLoadParm0(ilCtxList, false);
                     il.Emit(OpCodes.Stloc, idList0);
-                    // if(nowField != null) 
-                    // {
-                    //     RecursiveLoadParm1(ilCtxList, false);
-                    // }
-                    // else 
-                    // {
-                    //     // TODO.. 合并到上面的方法
-                    //     LoadParm1();
-                    // }
                     RecursiveLoadParm1(ilCtxList, false);
                     il.Emit(OpCodes.Stloc, idList1);
 
@@ -1082,6 +918,7 @@ namespace W3.TypeExtension
                                     if(itemctor == null) 
                                     {
                                         // il.Emit(OpCodes.Newobj, itemctor);
+                                        // 没有item构造器，暂且认为是基本类型，压入一个0，TODO.. 后面可以考虑压入default(T)
                                         il.Emit(OpCodes.Ldc_I4_0);
                                         il.Emit(OpCodes.Callvirt, listAddMethod);
                                     }
@@ -1097,51 +934,21 @@ namespace W3.TypeExtension
                         // list0的cnt > list1的cnt
                         il.MarkLabel(list0CntGreatlist1CntLabel);
                         {
-                            // 变量
-                            var idLoopCnt = localVarInt++;
-                            il.DeclareLocal(typeof(int));
-                            var idLoopIter = localVarInt++;
-                            il.DeclareLocal(typeof(int));
-                            // 标签
-                            var innerIIsLessCntLabel = il.DefineLabel();
-                            var innerForLabel = il.DefineLabel();
-
-                            il.Emit(OpCodes.Ldloc, idList0Cnt);
-                            il.Emit(OpCodes.Ldloc, idList1Cnt);
-                            il.Emit(OpCodes.Sub);
-                            il.Emit(OpCodes.Stloc, idLoopCnt);
-                            // i = 0
-                            il.Emit(OpCodes.Ldc_I4_0);
-                            il.Emit(OpCodes.Stloc, idLoopIter);
-                            il.Emit(OpCodes.Br, innerIIsLessCntLabel);
-
-                            // for
-                            il.MarkLabel(innerForLabel);
-                            {
-                                il.Emit(OpCodes.Ldloc, idList0);
-                                il.Emit(OpCodes.Ldloc, idList0);
-                                il.Emit(OpCodes.Callvirt, listGetCountMethod);
-                                il.Emit(OpCodes.Ldc_I4_1);
-                                il.Emit(OpCodes.Sub);
-                                il.Emit(OpCodes.Callvirt, listRemoveAtMethod);
-                            }
-
-                            // i++
-                            {
-                                il.Emit(OpCodes.Ldloc, idLoopIter);
-                                il.Emit(OpCodes.Ldc_I4_1);
-                                il.Emit(OpCodes.Add);
-                                il.Emit(OpCodes.Stloc, idLoopIter);
-                            }
-
-                            // i < cnt
-                            il.MarkLabel(innerIIsLessCntLabel);
-                            {
-                                il.Emit(OpCodes.Ldloc, idLoopIter);
-                                il.Emit(OpCodes.Ldloc, idLoopCnt);
-                                il.Emit(OpCodes.Clt);
-                                il.Emit(OpCodes.Brtrue, innerForLabel);
-                            }
+                            il.GenFor(
+                                () => {
+                                    il.Emit(OpCodes.Ldloc, idList0Cnt);
+                                    il.Emit(OpCodes.Ldloc, idList1Cnt);
+                                    il.Emit(OpCodes.Sub);
+                                },
+                                (idLoopIter) => {
+                                    il.Emit(OpCodes.Ldloc, idList0);
+                                    il.Emit(OpCodes.Ldloc, idList0);
+                                    il.Emit(OpCodes.Callvirt, listGetCountMethod);
+                                    il.Emit(OpCodes.Ldc_I4_1);
+                                    il.Emit(OpCodes.Sub);
+                                    il.Emit(OpCodes.Callvirt, listRemoveAtMethod);
+                                },
+                                ref localVarInt);
                         }
                     }
 
@@ -1154,13 +961,13 @@ namespace W3.TypeExtension
                                 il.Emit(OpCodes.Callvirt, listGetCountMethod);
                             }, 
                             (idLoopIter) => {
+                                // 说实话，这里因为IL数组赋值的代码特殊性，刚好可以构成和普通field赋值相似的结构（加载上下文时忽略最后一句，并把最后一句拿出来做操作），运气很好=。=
                                 var ilCtxItem1 = new ILCtxItem(); ilCtxItem1.opCodes = OpCodes.Ldloc; ilCtxItem1.varID0 = idLoopIter; ilCtxItem1.varID1 = idLoopIter;
                                 ilCtxList.Add(ilCtxItem1);
                                 var ilCtxItem2 = new ILCtxItem(); ilCtxItem2.opCodes = OpCodes.Callvirt; ilCtxItem2.mi = listGetItemMethod; ilCtxItem2.miex = listSetItemMethod;
                                 ilCtxList.Add(ilCtxItem2);
                                 {
                                     GenerateField(itemType, ilCtxList);
-                                    // GenerateStraightSetType(ilCtxList);
                                 }
                                 ilCtxList.RemoveAt(ilCtxList.Count - 1);
                                 ilCtxList.RemoveAt(ilCtxList.Count - 1);
@@ -1191,7 +998,7 @@ namespace W3.TypeExtension
                     Debug.Log(" IsBasicType " + nowType);
                     GenerateStraightSetType(ilCtxList);
                 }
-                // Unity Type, 使用 op_Equality
+                // Unity Type
                 else if(nowType.IsUnityType()) 
                 {
                     Debug.Log(" Unity Type " + nowType);

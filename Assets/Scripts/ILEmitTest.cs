@@ -1,165 +1,4 @@
-﻿/*using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-using System;
-using System.Reflection;
-using System.Reflection.Emit;
-using ILUtility;
-
-public class ILEmitTest : MonoBehaviour
-{
-    public class AAAType 
-    {
-        public int int_1;
-        public string str_1;
-        public Vector3 vec3_1;
-    }
-    public string logstr;
-    // Start is called before the first frame update
-    void Start()
-    {
-        Debug.Log(" ??? ");
-        // var a = GetIfElse();
-        // a(true);
-        // a(false);
-
-        // var f = GetLog();
-        // f();
-
-        // var logFunc = this.GetLog(logstr);
-        // logFunc();
-
-        // Type mytype = typeof(AAAType);
-        // var members = mytype.GetFields(BindingFlags.Public | BindingFlags.Instance);
-        // foreach (var item in members)
-        // {
-        //     Debug.Log(item);
-        // }
-        // int x = 7;
-
-        var func = GetTypeCmp<AAAType>();
-        var aaa = new AAAType(); aaa.int_1 = 5;
-        var bbb = new AAAType(); bbb.int_1 = 5;
-
-        Debug.Log("Ans " + func(aaa, bbb));
-        aaa.int_1 = 6;
-        Debug.Log("Ans " + func(aaa, bbb));
-    }
-
-    // Update is called once per frame
-    void Update()
-    {
-        
-    }
-
-    private void GenILMethod()
-    {
-        
-    }
-
-    Action<bool> GetIfElse()
-    {
-        var dm = new DynamicMethod("", null, new Type[] { typeof(bool) });
-        var gen = dm.GetILGenerator();
-
-        Label lbFalse = gen.DefineLabel();
-        Label lbRet = gen.DefineLabel();
-
-        //判断
-        gen.Emit(OpCodes.Ldarg_0);
-        gen.Emit(OpCodes.Ldc_I4, 1);
-        gen.Emit(OpCodes.Ceq);
-        //如果false: 跳至false代码
-        gen.Emit(OpCodes.Brfalse, lbFalse);
-        //true代码
-        // gen.EmitWriteLine("真");
-        gen.Emit(OpCodes.Ldstr, "Hello, Kitty!");
-        gen.Emit(OpCodes.Call, typeof(Debug).GetMethod("Log", new Type[] {typeof(string)}) );
-        // gen.Emit(OpCodes.Call, typeof(Console).GetMethod("WriteLine", new Type[] { typeof(string) }));
-        //跳至退出
-        gen.Emit(OpCodes.Br, lbRet);
-        //false代码
-        gen.MarkLabel(lbFalse);
-        gen.EmitWriteLine("假");
-        // gen.Emit(OpCodes.Call, typeof(Console).GetMethod("ReadLine"));
-        //退出代码
-        gen.MarkLabel(lbRet);
-        gen.Emit(OpCodes.Ret);
-
-        // dm.Invoke(null, new object[] { true });
-
-        var f = dm.CreateDelegate(typeof(Action<bool>)) as Action<bool>;
-
-        return f;
-    }
-
-    Action GetLog(string logstr)
-    {
-        var dm = new DynamicMethod("", null, null);
-        var il = dm.GetILGenerator();
-        
-        il.GenUnityLog(logstr);
-
-        il.Emit(OpCodes.Ret);
-
-        return dm.CreateDelegate(typeof(Action)) as Action;
-    }
-
-    Func<T, T, bool> GetTypeCmp<T>()
-    {
-        var type = typeof(T);
-        var fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance);
-        FieldInfo field = null;
-        foreach (var item in fields)
-        {
-            field = item;
-            Debug.Log(item);
-            break;
-        }
-
-        var dm = new DynamicMethod("", typeof(bool), new Type[]{type, type});
-        var il = dm.GetILGenerator();
-
-        Label lbFalse = il.DefineLabel();
-        Label lbRet = il.DefineLabel();
-        LocalBuilder localBool = il.DeclareLocal(typeof(bool));
-
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, field);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldfld, field);
-
-        il.Emit(OpCodes.Ceq);
-
-        // il.Emit(OpCodes.Stloc_0);
-        // il.Emit(OpCodes.Ldloc_0);
-
-        //如果false: 跳至false代码
-        il.Emit(OpCodes.Brfalse, lbFalse);
-        //true代码
-        il.GenUnityLog("相同");
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stloc_0);
-        //跳至退出
-        il.Emit(OpCodes.Br, lbRet);
-        //false代码
-        il.MarkLabel(lbFalse);
-        il.GenUnityLog("不同");
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc_0);
-        // gen.Emit(OpCodes.Call, typeof(Console).GetMethod("ReadLine"));
-        //退出代码
-        il.MarkLabel(lbRet);
-        il.Emit(OpCodes.Ldloc_0);
-        il.Emit(OpCodes.Ret);
-
-        return dm.CreateDelegate(typeof(Func<T, T, bool>)) as Func<T, T, bool>;
-    }
-}*/
-
-
-
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using System;
@@ -364,7 +203,7 @@ public class ILEmitTest : MonoBehaviour
         this.cmp = TypeUtility.GetTypeCmp<List<AAAType>>();
         this.clone = TypeUtility.GetTypeClone<List<AAAType>>();
 
-        CompareTime();
+        // CompareTime();
     }
 
     public class TestClass
@@ -620,11 +459,11 @@ TR_0024:
     void Update()
     {
         // isSame = cmp(aaa, bbb);
-        /*if(cmp(aaa, bbb) == false)
+        if(cmp(aaa, bbb) == false)
         {
             Debug.Log("不同了！");
             clone(aaa, bbb);
-        }*/
+        }
         // ZZY(aaa, bbb);
         // qqq = www;
     }
