@@ -333,6 +333,66 @@ namespace W3.TypeExtension
             /// </summary>
             void GenerateClass(Type nowType, List<ILCtxItem> ilCtxList) 
             {
+                // 标签
+                var endLabel = il.DefineLabel();
+                // 变量
+                // ...
+                // 先检查是否class是否有null的
+                il.GenIfThenElse(
+                    // if
+                    () =>
+                    {
+                        il.CompareWithNull(() => { RecursiveLoadParm0(ilCtxList); });
+                    },
+                    // then
+                    () =>
+                    {
+                        // 第一个参数为null
+                        il.GenIfThenElse(
+                            // if 
+                            () =>
+                            {
+                                il.CompareWithNull(() => { RecursiveLoadParm1(ilCtxList); });
+                            },
+                            // then
+                            () =>
+                            {
+                                // 第二个参数也为null，认为直接相同
+                                il.Emit(OpCodes.Br, endLabel);
+                            },
+                            // else
+                            () =>
+                            {
+                                // 第一个参数为null，第二个参数不为null
+                                il.Emit(OpCodes.Br, lbFalse);
+                            });
+                    },
+                    // else
+                    () =>
+                    {
+                        // 第一个参数不为null
+                        il.GenIfThenElse(
+                            // if 
+                            () =>
+                            {
+                                il.CompareWithNull(() => { RecursiveLoadParm1(ilCtxList); });
+                            },
+                            // then
+                            () =>
+                            {
+                                // 第一个参数不为null，第二个参数为null
+                                il.Emit(OpCodes.Br, lbFalse);
+                            },
+                            // else
+                            () =>
+                            {
+                                // 两个都不为null
+                                // do nothing...
+                            });
+                    });
+
+                // 这里开始没有任何一个为null
+
                 foreach (var field in nowType.GetFields(BindingFlags.Public | BindingFlags.Instance))
                 {
                     var ilCtxItem = new ILCtxItem(); ilCtxItem.opCodes = OpCodes.Ldfld; ilCtxItem.fi = field;
@@ -340,6 +400,9 @@ namespace W3.TypeExtension
                     GenerateField(field.FieldType, ilCtxList);
                     ilCtxList.RemoveAt(ilCtxList.Count - 1);
                 }
+
+                // 结束标签
+                il.MarkLabel(endLabel);
             }
             /// <summary>
             /// 生成一个List或者Array类型的field

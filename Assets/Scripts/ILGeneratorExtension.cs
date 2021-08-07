@@ -38,6 +38,44 @@ namespace ILUtility
             return il;
         }
 
+        public static ILGenerator MakeIntAdd(this ILGenerator il, int idVarInt, int addVal)
+        {
+            il.Emit(OpCodes.Ldloc, idVarInt);
+            il.Emit(OpCodes.Ldc_I4, addVal);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, idVarInt);
+
+            return il;
+        }
+
+        public static ILGenerator MakeIntSub(this ILGenerator il, int idVarInt, int subVal)
+        {
+            il.Emit(OpCodes.Ldloc, idVarInt);
+            il.Emit(OpCodes.Ldc_I4, subVal);
+            il.Emit(OpCodes.Sub);
+            il.Emit(OpCodes.Stloc, idVarInt);
+
+            return il;
+        }
+
+        public static ILGenerator CompareWithNull(this ILGenerator il, Action ctxFc)
+        {
+            //RecursiveLoadParm0(ilCtxList);
+            ctxFc();
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ceq);
+
+            return il;
+        }
+
+        public static ILGenerator SetIntVal(this ILGenerator il, int idVarInt, int setVal)
+        {
+            il.Emit(OpCodes.Ldc_I4, setVal);
+            il.Emit(OpCodes.Stloc, idVarInt);
+
+            return il;
+        }
+
         /// <summary>
         /// 生成一个For循环
         /// </summary>
@@ -95,6 +133,47 @@ namespace ILUtility
                 il.Emit(OpCodes.Clt);
                 il.Emit(OpCodes.Brtrue, innerForLabel);
             }
+            return il;
+        }
+
+        public static ILGenerator GenIfThenElse(this ILGenerator il, Action ifBodyFc, Action thenBodyFc, Action elseBodyFc)
+        {
+            // 变量
+            // ...
+            // 标签
+            var thenLabel = il.DefineLabel();
+            var elseLabel = il.DefineLabel();
+            var retLabel = il.DefineLabel();
+            //RecursiveLoadParm0(ilCtxList);
+            //il.Emit(OpCodes.Ldnull);
+            //il.Emit(OpCodes.Ceq);
+            ifBodyFc();
+            il.Emit(OpCodes.Brfalse, elseLabel);
+
+            il.MarkLabel(thenLabel);
+            {
+                if(thenBodyFc != null)
+                {
+                    // +1
+                    //il.Emit(OpCodes.Ldloc, idClassNullCnt);
+                    //il.Emit(OpCodes.Ldc_I4_1);
+                    //il.Emit(OpCodes.Add);
+                    //il.Emit(OpCodes.Stloc, idClassNullCnt);
+                    thenBodyFc();
+                }
+                il.Emit(OpCodes.Br, retLabel);
+            }
+
+            il.MarkLabel(elseLabel);
+            {
+                if(elseBodyFc != null)
+                {
+                    elseBodyFc();
+                }
+            }
+
+            il.MarkLabel(retLabel);
+
             return il;
         }
     }
