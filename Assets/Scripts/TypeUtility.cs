@@ -768,6 +768,118 @@ namespace W3.TypeExtension
             /// </summary>
             void GenerateClass(Type nowType, List<ILCtxItem> ilCtxList) 
             {
+                var endLabel = il.DefineLabel();
+                var beginLogicLabel = il.DefineLabel();
+                var ctor = nowType.GetConstructor(new Type[] { });
+
+                // 先检查是否有一个参数为空
+                il.GenIfThenElse(
+                    // if
+                    () =>
+                    {
+                        il.CompareWithNull(() => { RecursiveLoadParm0(ilCtxList, false); });
+                    },
+                    // then
+                    () =>
+                    {
+                        // 第一个参数 == null
+                        // 判断一下第二个参数是不是null
+                        il.GenIfThenElse(
+                            // if
+                            () =>
+                            {
+                                il.CompareWithNull(() => { RecursiveLoadParm1(ilCtxList, false); });
+                            },
+                            // then
+                            () =>
+                            {
+                                // 第二个参数也为null，那直接结束这个class field的操作
+                                il.Emit(OpCodes.Br, endLabel);
+                            },
+                            // else
+                            () =>
+                            {
+                                // 第二个参数不为null，
+                                // 为第一个参数new一个class
+                                if(ilCtxList == null || ilCtxList.Count == 0)
+                                {
+                                    // class 是 最顶层
+                                    il.GenUnityError("第一个参数为class，为null，而第二个参数不为null，没法为其拷贝。");
+                                    il.Emit(OpCodes.Br, lbRet);
+                                }
+                                else
+                                {
+                                    RecursiveLoadParm0(ilCtxList);
+                                    il.Emit(OpCodes.Newobj, ctor);
+
+                                    var lastItem = ilCtxList[ilCtxList.Count - 1];
+                                    // 如果最后一个上下文是Ldfld，那么说明不是List的内部成员
+                                    if (lastItem.opCodes == OpCodes.Ldfld)
+                                    {
+                                        il.Emit(OpCodes.Stfld, lastItem.fi);
+                                    }
+                                    // 是List成员
+                                    else if(lastItem.opCodes == OpCodes.Callvirt)
+                                    {
+                                        // set item
+                                        il.Emit(OpCodes.Callvirt, lastItem.miex);
+                                    }
+                                    // 进入正式逻辑
+                                    il.Emit(OpCodes.Br, beginLogicLabel);
+                                }
+                            });
+                    },
+                    // else
+                    () =>
+                    {
+                        // 第一个参数不为null
+                        // 判断一下第二个参数是不是null
+                        il.GenIfThenElse(
+                            // if
+                            () =>
+                            {
+                                il.CompareWithNull(() => { RecursiveLoadParm1(ilCtxList, false); });
+                            },
+                            // then
+                            () =>
+                            {
+                                // 第二个参数为null，那么把第一个参数变为null，然后结束
+                                if (ilCtxList == null || ilCtxList.Count == 0)
+                                {
+                                    // class 是 最顶层
+                                    il.GenUnityError("第一个参数为class，不为null，而第二个参数为null，没法为其拷贝。");
+                                    il.Emit(OpCodes.Br, lbRet);
+                                }
+                                else
+                                {
+                                    RecursiveLoadParm0(ilCtxList);
+                                    il.Emit(OpCodes.Ldnull);
+
+                                    var lastItem = ilCtxList[ilCtxList.Count - 1];
+                                    // 如果最后一个上下文是Ldfld，那么说明不是List的内部成员
+                                    if (lastItem.opCodes == OpCodes.Ldfld)
+                                    {
+                                        il.Emit(OpCodes.Stfld, lastItem.fi);
+                                    }
+                                    // 是List成员
+                                    else if (lastItem.opCodes == OpCodes.Callvirt)
+                                    {
+                                        // set item
+                                        il.Emit(OpCodes.Callvirt, lastItem.miex);
+                                    }
+                                    // 把第一个参数变为null以后就可以结束了，因为null算是已经拷贝完了
+                                    il.Emit(OpCodes.Br, endLabel);
+                                }
+                            },
+                            // else
+                            () =>
+                            {
+                                // 第二个参数不为null，那么往后执行即可
+                                il.Emit(OpCodes.Br, beginLogicLabel);
+                            });
+                    });
+
+                il.MarkLabel(beginLogicLabel);
                 foreach (var field in nowType.GetFields(BindingFlags.Public | BindingFlags.Instance))
                 {
                     // Debug.Log(nowFi.Name + " 中的 " + field.Name);
@@ -776,6 +888,8 @@ namespace W3.TypeExtension
                     GenerateField(field.FieldType, ilCtxList);
                     ilCtxList.RemoveAt(ilCtxList.Count - 1);
                 }
+
+                il.MarkLabel(endLabel);
             }
             /// <summary>
             /// 生成一个List或者数组类型的field
