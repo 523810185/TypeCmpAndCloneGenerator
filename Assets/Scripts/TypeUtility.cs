@@ -548,7 +548,7 @@ namespace W3.TypeExtension
                     GenerateList(nowType, ilCtxList);
                 }
                 // 基本类型
-                else if(nowType.IsBasicType())
+                else if(nowType.IsBasicType() || nowType.IsEnum)
                 {
                     Debug.Log(" IsBasicType " + nowType);
                     GenerateBasicType(ilCtxList);
@@ -1170,7 +1170,7 @@ namespace W3.TypeExtension
                     GenerateList(nowType, ilCtxList);
                 }
                 // 基本类型
-                else if(nowType.IsBasicType())
+                else if(nowType.IsBasicType() || nowType.IsEnum)
                 {
                     Debug.Log(" IsBasicType " + nowType);
                     GenerateStraightSetType(ilCtxList);
