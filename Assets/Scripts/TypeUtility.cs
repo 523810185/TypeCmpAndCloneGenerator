@@ -8,6 +8,7 @@ namespace W3.TypeExtension
     using System.Reflection;
     using System.Reflection.Emit;
     using ILUtility;
+    using System.Runtime.Serialization;
 
     public static class TypeExtension
     {
@@ -1248,6 +1249,106 @@ namespace W3.TypeExtension
             var clone = dm.CreateDelegate(typeof(Action<T, T>)) as Action<T, T>;
             m_mapTypeCloneCache.Add(type, clone);
             return clone;
+        }
+
+        // private static Dictionary<Type, object> m_mapTypeCloneWithReturnCache = new Dictionary<Type, object>();
+        // /// <summary>
+        // /// 返回一个类型的深拷贝器，可以自动递归复制public的字段。
+        // /// 注意：暂不支持 List<List<T>>, T[][], Dictionary 类型。
+        // /// </summary>
+        // /// <typeparam name="T"></typeparam>
+        // /// <returns></returns>
+        // public static Func<T, T> GetTypeCloneWithReturn<T>()
+        // {
+        //     Type type = typeof(T);
+        //     object cloneObj = null;
+        //     if(m_mapTypeCloneWithReturnCache.TryGetValue(type, out cloneObj)) 
+        //     {
+        //         return cloneObj as Func<T, T>;
+        //     }
+
+        //     var dm = new DynamicMethod("", type, new Type[]{type});
+        //     var il = dm.GetILGenerator();
+        //     Label lbRet = il.DefineLabel();
+        //     int localVarInt = 0; // 记录局部变量使用的id
+
+        //     il.MarkLabel(lbRet);
+
+        //     Func<T, T> cloneWrapper = (src) => {return src;};
+        //     m_mapTypeCloneWithReturnCache.Add(cloneWrapper);
+        //     return 
+        // }
+
+        private static Dictionary<Type, object> m_mapTypeCreateNewObjCache = new Dictionary<Type, object>();
+        /// <summary>
+        /// 好像没啥用，没有反射，不用IL也行
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <returns></returns>
+        public static Func<T> GetTypeCreateNewObj<T>()
+        {
+            Type type = typeof(T);
+            object ctorObj = null;
+            if(m_mapTypeCreateNewObjCache.TryGetValue(type, out ctorObj)) 
+            {
+                return ctorObj as Func<T>;
+            }
+
+            var dm = new DynamicMethod("", type, Type.EmptyTypes);
+            var il = dm.GetILGenerator();
+            Label lbRet = il.DefineLabel();
+            int localVarInt = 0; // 记录局部变量使用的id
+
+            var idRetAns = localVarInt++;
+            il.DeclareLocal(type); 
+
+            var noParmCtor = type.GetConstructor(Type.EmptyTypes);
+            if(noParmCtor == null) 
+            {
+                if(type.IsBasicType())
+                {
+                    if(type.IsFloatType()) 
+                    {
+                        il.Emit(OpCodes.Ldc_R4, 0f);
+                    }
+                    else 
+                    {
+                        il.Emit(OpCodes.Ldc_I4_0);
+                    }
+                }
+                else if(type.IsValueType) 
+                {
+                    // struct --> default(T)
+                    var idLocalStruct = localVarInt++;
+                    il.DeclareLocal(type);
+                    il.Emit(OpCodes.Ldloca, idLocalStruct); // 加载地址
+                    il.Emit(OpCodes.Initobj, type); // 在指定地址使用 default(T)
+                    il.Emit(OpCodes.Ldloc, idLocalStruct);
+                    // TODO.. class 能使用上面的作为 default(T) 么？待验证
+                }
+                else
+                {
+                    il.Emit(OpCodes.Ldtoken, type);
+                    il.Emit(OpCodes.Call, typeof(System.Type).GetMethod("GetTypeFromHandle"));
+                    il.Emit(OpCodes.Call, typeof(System.Runtime.Serialization.FormatterServices).GetMethod("GetUninitializedObject"));
+                }
+            }
+            else 
+            {
+                il.Emit(OpCodes.Newobj, noParmCtor);
+            }
+            // 存储返回值
+            il.Emit(OpCodes.Stloc, idRetAns);
+
+            il.MarkLabel(lbRet);
+            {
+                il.Emit(OpCodes.Ldloc, idRetAns);
+                il.Emit(OpCodes.Ret);
+            }
+
+            var ctor = dm.CreateDelegate(typeof(Func<T>)) as Func<T>;
+            m_mapTypeCreateNewObjCache.Add(type, ctor);
+            return ctor;
         }
     }
 }
