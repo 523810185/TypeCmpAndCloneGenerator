@@ -623,6 +623,7 @@ namespace W3.TypeExtension
         /// <summary>
         /// 返回一个类型的深拷贝器，可以自动递归复制public的字段。
         /// 注意：暂不支持 List<List<T>>, T[][], Dictionary 类型。
+        /// 注意：由于无法显示定义Action<ref T, T>形式的泛型中带ref的类型，因此，这个方法的深拷贝需要保证参数不为null；否则，建议使用<seealso cref="GetTypeCloneWithReturn"/>作为替代，但是会牺牲一定性能。
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <returns></returns>
@@ -640,19 +641,51 @@ namespace W3.TypeExtension
             Label lbRet = il.DefineLabel();
             int localVarInt = 0; // 记录局部变量使用的id
 
+            GenCloneInner(il, type, ref localVarInt, -1);
+
+            // 退出代码
+            {
+                il.MarkLabel(lbRet);
+                il.Emit(OpCodes.Ret);
+            }
+
+            var clone = dm.CreateDelegate(typeof(Action<T, T>)) as Action<T, T>;
+            m_mapTypeCloneCache.Add(type, clone);
+            return clone;
+        }
+
+        private static void GenCloneInner(ILGenerator il, Type type, ref int localVarIntFromCtx, int ctxParm0ID = -1/*-1表示不是一个局部变量，而是一个原函数的参数*/)
+        {
+            // 因为不能在本地函数中直接使用ref过来的int，只能先使用一份拷贝，最后再赋值回去
+            var localVarInt = localVarIntFromCtx;
+            var lbRet = il.DefineLabel();
             /// <summary>
             /// 加载参数0
             /// </summary>
             void LoadParm0()
             {
-                il.Emit(OpCodes.Ldarg_0);
+                if(ctxParm0ID == -1) 
+                {
+                    il.Emit(OpCodes.Ldarg_0);       
+                }
+                else 
+                {
+                    il.Emit(OpCodes.Ldloc, ctxParm0ID);
+                }
             }
             /// <summary>
             /// 加载参数1
             /// </summary>
             void LoadParm1()
             {
-                il.Emit(OpCodes.Ldarg_1);
+                if(ctxParm0ID == -1) 
+                {
+                    il.Emit(OpCodes.Ldarg_1);     
+                }
+                else 
+                {
+                    il.Emit(OpCodes.Ldarg_0);  
+                }
             }
             /// <summary>
             /// 为普通field赋值
@@ -817,8 +850,15 @@ namespace W3.TypeExtension
                                 if(ilCtxList == null || ilCtxList.Count == 0)
                                 {
                                     // class 是 最顶层
-                                    il.GenUnityError("第一个参数为class，为null，而第二个参数不为null，没法为其拷贝。");
-                                    il.Emit(OpCodes.Br, lbRet);
+                                    if(ctxParm0ID == -1) 
+                                    {
+                                        il.GenUnityError("第一个参数为class，为null，而第二个参数不为null，没法为其拷贝。");
+                                        il.Emit(OpCodes.Br, lbRet);
+                                    }
+                                    else 
+                                    {
+                                        // 这里不需要创建，因为在上下文中应该为第一个参数new好了（或者说不会跑到）
+                                    }
                                 }
                                 else
                                 {
@@ -860,8 +900,15 @@ namespace W3.TypeExtension
                                 if (ilCtxList == null || ilCtxList.Count == 0)
                                 {
                                     // class 是 最顶层
-                                    il.GenUnityError("第一个参数为class，不为null，而第二个参数为null，没法为其拷贝。");
-                                    il.Emit(OpCodes.Br, lbRet);
+                                    if(ctxParm0ID == -1) 
+                                    {
+                                        il.GenUnityError("第一个参数为class，不为null，而第二个参数为null，没法为其拷贝。");
+                                        il.Emit(OpCodes.Br, lbRet);
+                                    }
+                                    else 
+                                    {
+                                        // 这里也不需要逻辑，因为这种情况在上下文处就应该处理完毕了，这里是不会跑到的
+                                    }
                                 }
                                 else
                                 {
@@ -954,38 +1001,125 @@ namespace W3.TypeExtension
                 {
                     nowField = ilCtxList[ilCtxList.Count - 1].fi;
                 }
+                // TODO.. 这里没有像class一样考虑到上一层为List的情况；只考虑了上一层为class和为最顶层的情况
                 if(nowField == null) 
                 {
                     // Debug.LogErrorFormat("暂不支持最外层是List的结构，Type = {0}", listType);
                     // TODO.. 为参数0带上ref标记，使得即使其在null相关的操作时能被正确赋值
                     // 特殊逻辑（最外层就是List）
-                    var _cmpSecondParmIsNullLabel = il.DefineLabel();
-                    LoadParm0();
-                    il.Emit(OpCodes.Ldnull);
-                    il.Emit(OpCodes.Ceq);
-                    il.Emit(OpCodes.Brfalse, _cmpSecondParmIsNullLabel);
+                    // var _cmpSecondParmIsNullLabel = il.DefineLabel();
+                    // LoadParm0();
+                    // il.Emit(OpCodes.Ldnull);
+                    // il.Emit(OpCodes.Ceq);
+                    // il.Emit(OpCodes.Brfalse, _cmpSecondParmIsNullLabel);
 
-                    // 第一个参数是null
-                    {
-                        il.GenUnityError("第一个参数是null，clone没有意义！");
-                        il.Emit(OpCodes.Br, lbRet);
-                    }
+                    // // 第一个参数是null
+                    // {
+                    //     il.GenUnityError("第一个参数是null，clone没有意义！");
+                    //     il.Emit(OpCodes.Br, lbRet);
+                    // }
 
-                    // 第一个参数不是null
-                    il.MarkLabel(_cmpSecondParmIsNullLabel);
-                    {
-                        LoadParm1();
-                        il.Emit(OpCodes.Ldnull);
-                        il.Emit(OpCodes.Ceq);
-                        // 第二个也不是null，进入正式比较
-                        il.Emit(OpCodes.Brfalse, beginSetLabel);
-                    }
+                    // // 第一个参数不是null
+                    // il.MarkLabel(_cmpSecondParmIsNullLabel);
+                    // {
+                    //     LoadParm1();
+                    //     il.Emit(OpCodes.Ldnull);
+                    //     il.Emit(OpCodes.Ceq);
+                    //     // 第二个也不是null，进入正式比较
+                    //     il.Emit(OpCodes.Brfalse, beginSetLabel);
+                    // }
 
-                    // 第二个参数是null
-                    {
-                        il.GenUnityError("第二个参数是null，clone没有意义！");
-                        il.Emit(OpCodes.Br, lbRet);
-                    }
+                    // // 第二个参数是null
+                    // {
+                    //     il.GenUnityError("第二个参数是null，clone没有意义！");
+                    //     il.Emit(OpCodes.Br, lbRet);
+                    // }
+
+                    il.GenIfThenElse(
+                        // if
+                        () => 
+                        {
+                            il.CompareWithNull(() => {LoadParm0();});
+                        },
+                        // then
+                        () => 
+                        {
+                            // 第一个参数为null
+                            il.GenIfThenElse(
+                                // if
+                                () => 
+                                {
+                                    il.CompareWithNull(() => {LoadParm1();});
+                                },
+                                // then
+                                () => 
+                                {
+                                    // 1.2参数都为null
+                                    if(ctxParm0ID == -1) 
+                                    {
+                                        il.Emit(OpCodes.Br, lbRet);
+                                    }
+                                    else 
+                                    {
+                                        // 不会跑到
+                                    }
+                                },
+                                // else
+                                () => 
+                                {
+                                    // 1为null，2不为null
+                                    if(ctxParm0ID == -1) 
+                                    {
+                                        il.GenUnityError("第一个参数是null，clone没有意义！");
+                                        il.Emit(OpCodes.Br, lbRet);
+                                    }
+                                    else 
+                                    {
+                                        il.Emit(OpCodes.Br, beginSetLabel);
+                                    }
+                                }
+                            );
+                        },
+                        // else
+                        () => 
+                        {
+                            // 第一个参数不为null
+                            il.GenIfThenElse(
+                                // if
+                                () => 
+                                {
+                                    il.CompareWithNull(() => {LoadParm1();});
+                                },
+                                // then
+                                () => 
+                                {
+                                    // 1不为null，2为null
+                                    if(ctxParm0ID == -1) 
+                                    {
+                                        il.GenUnityError("第二个参数是null，clone没有意义！");
+                                        il.Emit(OpCodes.Br, lbRet);
+                                    }
+                                    else 
+                                    {
+                                        // 不会跑到
+                                    }
+                                },
+                                // else
+                                () => 
+                                {
+                                    // 1不为null，2不为null
+                                    if(ctxParm0ID == -1) 
+                                    {
+                                        il.Emit(OpCodes.Br, beginSetLabel);
+                                    }
+                                    else 
+                                    {
+                                        il.Emit(OpCodes.Br, beginSetLabel);
+                                    }
+                                }
+                            );
+                        }
+                    );
                 }
                 else 
                 {
@@ -1240,44 +1374,109 @@ namespace W3.TypeExtension
 
             GenerateField(type, new List<ILCtxItem>());
 
-            // 退出代码
+            il.MarkLabel(lbRet);
+            // 最后把变量id传回去
+            localVarIntFromCtx = localVarInt;
+        }
+
+        private static Dictionary<Type, object> m_mapTypeCloneWithReturnCache = new Dictionary<Type, object>();
+        /// <summary>
+        /// 返回一个类型的深拷贝器，可以自动递归复制public的字段。
+        /// 注意：暂不支持 List<List<T>>, T[][], Dictionary 类型。
+        /// 注意：这个方法总是会新建一个目标对象，具有一定开销，因此，如果确定参数不会为null，可以使用<seealso cref="GetTypeClone"/>作为替代来提升性能。
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <returns></returns>
+        public static Func<T, T> GetTypeCloneWithReturn<T>()
+        {
+            Type type = typeof(T);
+            object cloneObj = null;
+            if(m_mapTypeCloneWithReturnCache.TryGetValue(type, out cloneObj)) 
             {
-                il.MarkLabel(lbRet);
+                return cloneObj as Func<T, T>;
+            }
+
+            var dm = new DynamicMethod("", type, new Type[]{type});
+            var il = dm.GetILGenerator();
+            Label lbRet = il.DefineLabel();
+            int localVarInt = 0; // 记录局部变量使用的id
+            var idForRetAns = localVarInt++;
+            il.DeclareLocal(type);
+            
+            /// <summary>
+            /// 加载参数
+            /// </summary>
+            void LoadParm()
+            {
+                il.Emit(OpCodes.Ldarg_0);
+            }
+
+            if(type.IsBasicType()) 
+            {
+                // 基本类型，把参数直接储存
+                LoadParm();
+                il.Emit(OpCodes.Stloc, idForRetAns);
+            }
+            else if(type.IsValueType) 
+            {
+                // struct类型，不会为null --> default(T)
+                var idLocalStruct = localVarInt++;
+                il.DeclareLocal(type);
+                il.Emit(OpCodes.Ldloca, idForRetAns); // 加载地址
+                il.Emit(OpCodes.Initobj, type); // 在指定地址使用 default(T)
+
+                GenCloneInner(il, type, ref localVarInt, idForRetAns);
+            }
+            else if(type.IsList() || type.IsClass)
+            {
+                // 可以为null的类型
+                il.GenIfThenElse(
+                    // if
+                    () => 
+                    {
+                        il.CompareWithNull(() => {LoadParm();});
+                    },
+                    // then
+                    () => 
+                    {
+                        // 参数为null，那么返回一个null即可
+                        il.Emit(OpCodes.Ldnull);
+                        il.Emit(OpCodes.Stloc, idForRetAns);
+                    },
+                    // else
+                    () =>
+                    {
+                        // 参数不为null，为ret新建一个
+                        // TODO.. 突然发现是不是要必须获取public的？，不然可能new不出来
+                        // TODO.. T[]有构造器么？
+                        var ctor = type.GetConstructor(Type.EmptyTypes);
+                        if(ctor == null) 
+                        {
+                            il.Emit(OpCodes.Ldtoken, type);
+                            il.Emit(OpCodes.Call, typeof(System.Type).GetMethod("GetTypeFromHandle"));
+                            il.Emit(OpCodes.Call, typeof(System.Runtime.Serialization.FormatterServices).GetMethod("GetUninitializedObject"));
+                        }
+                        else 
+                        {
+                            il.Emit(OpCodes.Newobj, ctor);
+                        }
+                        il.Emit(OpCodes.Stloc, idForRetAns);
+
+                        GenCloneInner(il, type, ref localVarInt, idForRetAns);
+                    }
+                );
+            }
+
+            il.MarkLabel(lbRet);
+            {
+                il.Emit(OpCodes.Ldloc, idForRetAns);
                 il.Emit(OpCodes.Ret);
             }
 
-            var clone = dm.CreateDelegate(typeof(Action<T, T>)) as Action<T, T>;
-            m_mapTypeCloneCache.Add(type, clone);
+            Func<T, T> clone = dm.CreateDelegate(typeof(Func<T, T>)) as Func<T, T>;
+            m_mapTypeCloneWithReturnCache.Add(type, clone);
             return clone;
         }
-
-        // private static Dictionary<Type, object> m_mapTypeCloneWithReturnCache = new Dictionary<Type, object>();
-        // /// <summary>
-        // /// 返回一个类型的深拷贝器，可以自动递归复制public的字段。
-        // /// 注意：暂不支持 List<List<T>>, T[][], Dictionary 类型。
-        // /// </summary>
-        // /// <typeparam name="T"></typeparam>
-        // /// <returns></returns>
-        // public static Func<T, T> GetTypeCloneWithReturn<T>()
-        // {
-        //     Type type = typeof(T);
-        //     object cloneObj = null;
-        //     if(m_mapTypeCloneWithReturnCache.TryGetValue(type, out cloneObj)) 
-        //     {
-        //         return cloneObj as Func<T, T>;
-        //     }
-
-        //     var dm = new DynamicMethod("", type, new Type[]{type});
-        //     var il = dm.GetILGenerator();
-        //     Label lbRet = il.DefineLabel();
-        //     int localVarInt = 0; // 记录局部变量使用的id
-
-        //     il.MarkLabel(lbRet);
-
-        //     Func<T, T> cloneWrapper = (src) => {return src;};
-        //     m_mapTypeCloneWithReturnCache.Add(cloneWrapper);
-        //     return 
-        // }
 
         private static Dictionary<Type, object> m_mapTypeCreateNewObjCache = new Dictionary<Type, object>();
         /// <summary>
