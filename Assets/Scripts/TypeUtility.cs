@@ -40,6 +40,16 @@ namespace W3.TypeExtension
         }
 
         /// <summary>
+        /// 返回是否是浮点数类型
+        /// </summary>
+        /// <param name="type"></param>
+        /// <returns></returns>
+        public static bool IsFloatType(this Type type) 
+        {
+            return type == typeof(float) || type == typeof(double);
+        }
+
+        /// <summary>
         /// 返回是否是Unity的类型
         /// </summary>
         /// <param name="type"></param>
@@ -128,7 +138,8 @@ namespace W3.TypeExtension
         }
         private static Dictionary<Type, object> m_mapTypeCmpCache = new Dictionary<Type, object>();
         /// <summary>
-        /// TODO.. class null的时候处理
+        /// 返回一个类型的深比较器，可以自动递归比较public的字段。
+        /// 注意：暂不支持 List<List<T>>, T[][], Dictionary 类型。
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <returns></returns>
@@ -609,17 +620,18 @@ namespace W3.TypeExtension
 
         private static Dictionary<Type, object> m_mapTypeCloneCache = new Dictionary<Type, object>();
         /// <summary>
-        /// TODO.. class null的时候处理
+        /// 返回一个类型的深拷贝器，可以自动递归复制public的字段。
+        /// 注意：暂不支持 List<List<T>>, T[][], Dictionary 类型。
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <returns></returns>
         public static Action<T, T> GetTypeClone<T>()
         {
             Type type = typeof(T);
-            object cmpObj = null;
-            if(m_mapTypeCloneCache.TryGetValue(type, out cmpObj)) 
+            object cloneObj = null;
+            if(m_mapTypeCloneCache.TryGetValue(type, out cloneObj)) 
             {
-                return cmpObj as Action<T, T>;
+                return cloneObj as Action<T, T>;
             }
 
             var dm = new DynamicMethod("", null, new Type[]{type, type});
@@ -1096,7 +1108,31 @@ namespace W3.TypeExtension
                                     {
                                         // il.Emit(OpCodes.Newobj, itemctor);
                                         // 没有item构造器，暂且认为是基本类型，压入一个0，TODO.. 后面可以考虑压入default(T)
-                                        il.Emit(OpCodes.Ldc_I4_0);
+                                        if(itemType.IsBasicType())
+                                        {
+                                            if(itemType.IsFloatType()) 
+                                            {
+                                                il.Emit(OpCodes.Ldc_R4, 0f);
+                                            }
+                                            else 
+                                            {
+                                                il.Emit(OpCodes.Ldc_I4_0);
+                                            }
+                                        }
+                                        else if(itemType.IsValueType) 
+                                        {
+                                            // struct --> default(T)
+                                            var idLocalStruct = localVarInt++;
+                                            il.DeclareLocal(itemType);
+                                            il.Emit(OpCodes.Ldloca, idLocalStruct); // 加载地址
+                                            il.Emit(OpCodes.Initobj, itemType); // 在指定地址使用 default(T)
+                                            il.Emit(OpCodes.Ldloc, idLocalStruct);
+                                            // TODO.. class 能使用上面的作为 default(T) 么？待验证
+                                        }
+                                        else
+                                        {
+                                            il.Emit(OpCodes.Ldnull);
+                                        }
                                         il.Emit(OpCodes.Callvirt, listAddMethod);
                                     }
                                     else 
