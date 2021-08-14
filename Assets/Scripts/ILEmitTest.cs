@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 using ILUtility;
 using W3.TypeExtension;
+using DeepCopy;
 
 public class ILEmitTest : MonoBehaviour
 {
@@ -115,7 +116,7 @@ public class ILEmitTest : MonoBehaviour
     }
 
     private Func<List<AAAType>, List<AAAType>, bool> cmp;
-    private Action<List<AAAType>, List<AAAType>> clone;
+    private Func<List<AAAType>, List<AAAType>, List<AAAType>> clone;
     public string logstr;
     // Start is called before the first frame update
     void Start()
@@ -201,7 +202,7 @@ public class ILEmitTest : MonoBehaviour
         Debug.Log("aaa222 " + (aaatest.string_list[0].int_list == null));
 
         this.cmp = TypeUtility.GetTypeCmp<List<AAAType>>();
-        this.clone = TypeUtility.GetTypeClone<List<AAAType>>();
+        this.clone = TypeUtility.GetTypeCloneWithReturnAndTwoParms<List<AAAType>>();
 
         // CompareTime();
     }
@@ -220,7 +221,7 @@ public class ILEmitTest : MonoBehaviour
         var b = new TestClass();
         System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
         sw.Start();
-        var clone = TypeUtility.GetTypeClone<TestClass>();
+        var clone = TypeUtility.GetTypeCloneWithReturnAndTwoParms<TestClass>();
         var cmp = TypeUtility.GetTypeCmp<TestClass>();
         sw.Stop();
         Debug.Log("ILEmit生成回调时间：" + sw.ElapsedMilliseconds + " ms");
@@ -251,10 +252,18 @@ public class ILEmitTest : MonoBehaviour
         sw.Restart();
         for (int i = 0; i < cnt; i++)
         {
-            clone(a, b);
+            a = clone(a, b);
         }
         sw.Stop();
         Debug.Log("ILEmit深拷贝：" + sw.ElapsedMilliseconds + " ms");
+
+        sw.Restart();
+        for (int i = 0; i < cnt; i++)
+        {
+            a = DeepCopier.Copy(b);
+        }
+        sw.Stop();
+        Debug.Log("orleans 中的深拷贝：" + sw.ElapsedMilliseconds + " ms");
 
         Debug.LogWarning("------逐字段比较1e7次------");
         sw.Restart();
@@ -462,7 +471,7 @@ TR_0024:
         if(cmp(aaa, bbb) == false)
         {
             Debug.Log("不同了！");
-            clone(aaa, bbb);
+            aaa = clone(aaa, bbb);
         }
         // ZZY(aaa, bbb);
         // qqq = www;
