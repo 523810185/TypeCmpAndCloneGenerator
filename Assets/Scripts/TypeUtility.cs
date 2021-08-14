@@ -641,7 +641,7 @@ namespace W3.TypeExtension
             Label lbRet = il.DefineLabel();
             int localVarInt = 0; // 记录局部变量使用的id
 
-            GenCloneInner(il, type, ref localVarInt, -1);
+            GenCloneInner(il, type, ref localVarInt, -1, 2);
 
             // 退出代码
             {
@@ -654,8 +654,21 @@ namespace W3.TypeExtension
             return clone;
         }
 
-        private static void GenCloneInner(ILGenerator il, Type type, ref int localVarIntFromCtx, int ctxParm0ID = -1/*-1表示不是一个局部变量，而是一个原函数的参数*/)
+        private static void GenCloneInner(ILGenerator il, Type type, ref int localVarIntFromCtx, int ctxParm0ID = -1/*-1表示不是一个局部变量，而是一个原函数的参数*/, 
+            int parmCnt = 2/*默认传入的参数为两个*/)
         {
+            // 事先检查一下上下文参数合法性
+            if(parmCnt < 1 || parmCnt > 2) 
+            {
+                Debug.LogErrorFormat("GenCloneInner 上下文参数必须为1个或者2个！当前为 {0} 个。", parmCnt);
+                return;
+            }
+            if(parmCnt == 1 && ctxParm0ID == -1) 
+            {
+                Debug.LogErrorFormat("GenCloneInner 当上下文参数为1个的时候，必须第一个变量必须要有上下文变量id");
+                return;
+            }
+
             // 因为不能在本地函数中直接使用ref过来的int，只能先使用一份拷贝，最后再赋值回去
             var localVarInt = localVarIntFromCtx;
             var lbRet = il.DefineLabel();
@@ -678,14 +691,7 @@ namespace W3.TypeExtension
             /// </summary>
             void LoadParm1()
             {
-                if(ctxParm0ID == -1) 
-                {
-                    il.Emit(OpCodes.Ldarg_1);     
-                }
-                else 
-                {
-                    il.Emit(OpCodes.Ldarg_0);  
-                }
+                il.Emit(OpCodes.Ldarg, parmCnt - 1);
             }
             /// <summary>
             /// 为普通field赋值
@@ -1425,7 +1431,7 @@ namespace W3.TypeExtension
                 il.Emit(OpCodes.Ldloca, idForRetAns); // 加载地址
                 il.Emit(OpCodes.Initobj, type); // 在指定地址使用 default(T)
 
-                GenCloneInner(il, type, ref localVarInt, idForRetAns);
+                GenCloneInner(il, type, ref localVarInt, idForRetAns, 1);
             }
             else if(type.IsList() || type.IsClass)
             {
@@ -1462,7 +1468,7 @@ namespace W3.TypeExtension
                         }
                         il.Emit(OpCodes.Stloc, idForRetAns);
 
-                        GenCloneInner(il, type, ref localVarInt, idForRetAns);
+                        GenCloneInner(il, type, ref localVarInt, idForRetAns, 1);
                     }
                 );
             }
@@ -1475,6 +1481,124 @@ namespace W3.TypeExtension
 
             Func<T, T> clone = dm.CreateDelegate(typeof(Func<T, T>)) as Func<T, T>;
             m_mapTypeCloneWithReturnCache.Add(type, clone);
+            return clone;
+        }
+
+        private static Dictionary<Type, object> m_mapTypeCloneWithReturnAndTwoParmsCache = new Dictionary<Type, object>();
+        /// <summary>
+        /// 返回一个类型的深拷贝器，可以自动递归复制public的字段。
+        /// 注意：暂不支持 List<List<T>>, T[][], Dictionary 类型。
+        /// 这个方法类似 a = clone(a, b); 这样调用，来把b深拷贝给a
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <returns></returns>
+        public static Func<T, T, T> GetTypeCloneWithReturnAndTwoParms<T>()
+        {
+            Type type = typeof(T);
+            object cloneObj = null;
+            if(m_mapTypeCloneWithReturnAndTwoParmsCache.TryGetValue(type, out cloneObj)) 
+            {
+                return cloneObj as Func<T, T, T>;
+            }
+
+            var dm = new DynamicMethod("", type, new Type[]{type, type});
+            var il = dm.GetILGenerator();
+            Label lbRet = il.DefineLabel();
+            int localVarInt = 0; // 记录局部变量使用的id
+            var idForRetAns = localVarInt++;
+            il.DeclareLocal(type);
+            
+            /// <summary>
+            /// 加载参数0
+            /// </summary>
+            void LoadParm0()
+            {
+                il.Emit(OpCodes.Ldarg_0);
+            }
+            /// <summary>
+            /// 加载参数1
+            /// </summary>
+            void LoadParm1()
+            {
+                il.Emit(OpCodes.Ldarg_1);
+            }
+
+            if(type.IsBasicType()) 
+            {
+                // 基本类型，把参数直接储存
+                LoadParm1();
+                il.Emit(OpCodes.Stloc, idForRetAns);
+            }
+            else if(type.IsValueType) 
+            {
+                // struct类型，不会为null
+                GenCloneInner(il, type, ref localVarInt, idForRetAns, 2);
+            }
+            else if(type.IsList() || type.IsClass)
+            {
+                // 可以为null的类型
+                il.GenIfThenElse(
+                    // if（尝试比较第二个参数，也就是来源是否为null）
+                    () => 
+                    {
+                        il.CompareWithNull(() => {LoadParm1();});
+                    },
+                    // then
+                    () => 
+                    {
+                        // 来源为null，那么返回一个null即可
+                        il.Emit(OpCodes.Ldnull);
+                        il.Emit(OpCodes.Stloc, idForRetAns);
+                    },
+                    // else
+                    () =>
+                    {
+                        // 来源不为null，那么需要保证第一个参数不为null
+                        // TODO.. 突然发现是不是要必须获取public的？，不然可能new不出来
+                        // TODO.. T[]有构造器么？
+                        // 现存储第一个参数到ret上
+                        LoadParm0();
+                        il.Emit(OpCodes.Stloc, idForRetAns);
+                        il.GenIfThenElse(
+                            // if
+                            () => 
+                            {
+                                il.CompareWithNull(() => {il.Emit(OpCodes.Ldloc, idForRetAns);});
+                            },
+                            // then
+                            () =>
+                            {
+                                // 为null，需要创建
+                                var ctor = type.GetConstructor(Type.EmptyTypes);
+                                if(ctor == null) 
+                                {
+                                    il.Emit(OpCodes.Ldtoken, type);
+                                    il.Emit(OpCodes.Call, typeof(System.Type).GetMethod("GetTypeFromHandle"));
+                                    il.Emit(OpCodes.Call, typeof(System.Runtime.Serialization.FormatterServices).GetMethod("GetUninitializedObject"));
+                                }
+                                else 
+                                {
+                                    il.Emit(OpCodes.Newobj, ctor);
+                                }
+                                il.Emit(OpCodes.Stloc, idForRetAns);
+                            },
+                            // else
+                            null
+                        );
+
+                        GenCloneInner(il, type, ref localVarInt, idForRetAns, 2);
+                    }
+                );
+            }
+
+            il.MarkLabel(lbRet);
+            {
+                il.Emit(OpCodes.Ldloc, idForRetAns);
+                il.Emit(OpCodes.Ret);
+            }
+
+            Func<T, T, T> clone = dm.CreateDelegate(typeof(Func<T, T, T>)) as Func<T, T, T>;
+            m_mapTypeCloneWithReturnAndTwoParmsCache.Add(type, clone);
             return clone;
         }
 
