@@ -73,6 +73,11 @@ namespace W3.TypeExtension
                 || type.IsArray;
         }
 
+        public static bool IsStructClass(this Type type) 
+        {
+            return type.IsValueType && !type.IsBasicType();
+        }
+
         /// <summary>
         /// 返回 这个类型参数为 T Equals(T) 的方法
         /// </summary>
@@ -199,7 +204,7 @@ namespace W3.TypeExtension
                         {
                             if(item.opCodes == OpCodes.Ldfld) 
                             {
-                                Debug.Log("Ldfld, " + item.fi.Name);
+                                // Debug.Log("Ldfld, " + item.fi.Name);
                                 il.Emit(OpCodes.Ldfld, item.fi); 
                             }
                             else 
@@ -350,58 +355,61 @@ namespace W3.TypeExtension
                 // 变量
                 // ...
                 // 先检查是否class是否有null的
-                il.GenIfThenElse(
-                    // if
-                    () =>
-                    {
-                        il.CompareWithNull(() => { RecursiveLoadParm0(ilCtxList); });
-                    },
-                    // then
-                    () =>
-                    {
-                        // 第一个参数为null
-                        il.GenIfThenElse(
-                            // if 
-                            () =>
-                            {
-                                il.CompareWithNull(() => { RecursiveLoadParm1(ilCtxList); });
-                            },
-                            // then
-                            () =>
-                            {
-                                // 第二个参数也为null，认为直接相同
-                                il.Emit(OpCodes.Br, endLabel);
-                            },
-                            // else
-                            () =>
-                            {
-                                // 第一个参数为null，第二个参数不为null
-                                il.Emit(OpCodes.Br, lbFalse);
-                            });
-                    },
-                    // else
-                    () =>
-                    {
-                        // 第一个参数不为null
-                        il.GenIfThenElse(
-                            // if 
-                            () =>
-                            {
-                                il.CompareWithNull(() => { RecursiveLoadParm1(ilCtxList); });
-                            },
-                            // then
-                            () =>
-                            {
-                                // 第一个参数不为null，第二个参数为null
-                                il.Emit(OpCodes.Br, lbFalse);
-                            },
-                            // else
-                            () =>
-                            {
-                                // 两个都不为null
-                                // do nothing...
-                            });
-                    });
+                if(!nowType.IsStructClass())
+                {
+                    il.GenIfThenElse(
+                        // if
+                        () =>
+                        {
+                            il.CompareWithNull(() => { RecursiveLoadParm0(ilCtxList); });
+                        },
+                        // then
+                        () =>
+                        {
+                            // 第一个参数为null
+                            il.GenIfThenElse(
+                                // if 
+                                () =>
+                                {
+                                    il.CompareWithNull(() => { RecursiveLoadParm1(ilCtxList); });
+                                },
+                                // then
+                                () =>
+                                {
+                                    // 第二个参数也为null，认为直接相同
+                                    il.Emit(OpCodes.Br, endLabel);
+                                },
+                                // else
+                                () =>
+                                {
+                                    // 第一个参数为null，第二个参数不为null
+                                    il.Emit(OpCodes.Br, lbFalse);
+                                });
+                        },
+                        // else
+                        () =>
+                        {
+                            // 第一个参数不为null
+                            il.GenIfThenElse(
+                                // if 
+                                () =>
+                                {
+                                    il.CompareWithNull(() => { RecursiveLoadParm1(ilCtxList); });
+                                },
+                                // then
+                                () =>
+                                {
+                                    // 第一个参数不为null，第二个参数为null
+                                    il.Emit(OpCodes.Br, lbFalse);
+                                },
+                                // else
+                                () =>
+                                {
+                                    // 两个都不为null
+                                    // do nothing...
+                                });
+                        });
+                }
 
                 // 这里开始没有任何一个为null
 
@@ -556,36 +564,36 @@ namespace W3.TypeExtension
             {
                 if(nowType.IsList())
                 {
-                    Debug.Log(" IsListType " + nowType);
+                    // Debug.Log(" IsListType " + nowType);
                     GenerateList(nowType, ilCtxList);
                 }
                 // 基本类型
                 else if(nowType.IsBasicType() || nowType.IsEnum)
                 {
-                    Debug.Log(" IsBasicType " + nowType);
+                    // Debug.Log(" IsBasicType " + nowType);
                     GenerateBasicType(ilCtxList);
                 }
                 // Unity Type, 使用 op_Equality
                 else if(nowType.IsUnityType()) 
                 {
-                    Debug.Log(" Unity Type " + nowType);
+                    // Debug.Log(" Unity Type " + nowType);
                     GenerateHaveOpEqualType(nowType, ilCtxList);
                 }
                 // 其他一些带有 op_Equality 的（例如string，Vector3）
                 else if(nowType.GetCurTypeOpEqualMethodInfoIncludeParent() != null)
                 {
-                    Debug.Log(" op_Equality ==== " + nowType);
+                    // Debug.Log(" op_Equality ==== " + nowType);
                     GenerateHaveOpEqualType(nowType, ilCtxList);
                 }
                 // 重写了 T Equal(T)
                 else if(nowType.GetCurTypeEqualsMethodInfo() != null)
                 {
-                    Debug.Log(" Equals ==== " + nowType);
+                    // Debug.Log(" Equals ==== " + nowType);
                     GenerateCanEqualType(nowType, ilCtxList);
                 }
                 else // 递归生成
                 {
-                    Debug.Log(" 递归生成 " + nowType);
+                    // Debug.Log(" 递归生成 " + nowType);
                     // TODO.. 这里现在是给编辑器的序列化数据使用，所以class不会为null
                     GenerateClass(nowType, ilCtxList);
                 }
@@ -614,6 +622,9 @@ namespace W3.TypeExtension
                 il.Emit(OpCodes.Ret);
             }
 
+            // Type t = typeBuilder.CreateType();
+            // assemblyBuilder.Save("StudyOpCodes.dll"); 
+
             var cmp = dm.CreateDelegate(typeof(Func<T, T, bool>)) as Func<T, T, bool>;
             m_mapTypeCmpCache.Add(type, cmp);
             return cmp;
@@ -627,6 +638,7 @@ namespace W3.TypeExtension
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <returns></returns>
+        [Obsolete("由于不支持带出第一个参数的值给外端，所以建议使用 GetTypeCloneWithReturnAndTwoParms 作为替代。")]
         public static Action<T, T> GetTypeClone<T>()
         {
             Type type = typeof(T);
@@ -679,11 +691,11 @@ namespace W3.TypeExtension
             {
                 if(ctxParm0ID == -1) 
                 {
-                    il.Emit(OpCodes.Ldarg_0);       
+                    il.Emit(type.IsStructClass() ? OpCodes.Ldarga : OpCodes.Ldarg, 0);       
                 }
                 else 
                 {
-                    il.Emit(OpCodes.Ldloc, ctxParm0ID);
+                    il.Emit(type.IsStructClass() ? OpCodes.Ldloca : OpCodes.Ldloc, ctxParm0ID);
                 }
             }
             /// <summary>
@@ -730,9 +742,9 @@ namespace W3.TypeExtension
                     for (int i = 0; i < cnt; i++)
                     {
                         var item = ilCtxList[i];
-                        if (item.opCodes == OpCodes.Ldfld)
+                        if (item.opCodes == OpCodes.Ldfld || item.opCodes == OpCodes.Ldflda)
                         {
-                            il.Emit(OpCodes.Ldfld, item.fi);
+                            il.Emit(item.opCodes, item.fi);
                         }
                         else if (item.opCodes == OpCodes.Ldloc)
                         {
@@ -763,7 +775,7 @@ namespace W3.TypeExtension
                     for (int i = 0; i < cnt; i++)
                     {
                         var item = ilCtxList[i];
-                        if (item.opCodes == OpCodes.Ldfld)
+                        if (item.opCodes == OpCodes.Ldfld || item.opCodes == OpCodes.Ldflda)
                         {
                             il.Emit(OpCodes.Ldfld, item.fi);
                         }
@@ -825,131 +837,134 @@ namespace W3.TypeExtension
                 var ctor = nowType.GetConstructor(new Type[] { });
 
                 // 先检查是否有一个参数为空
-                il.GenIfThenElse(
-                    // if
-                    () =>
-                    {
-                        il.CompareWithNull(() => { RecursiveLoadParm0(ilCtxList, false); });
-                    },
-                    // then
-                    () =>
-                    {
-                        // 第一个参数 == null
-                        // 判断一下第二个参数是不是null
-                        il.GenIfThenElse(
-                            // if
-                            () =>
-                            {
-                                il.CompareWithNull(() => { RecursiveLoadParm1(ilCtxList, false); });
-                            },
-                            // then
-                            () =>
-                            {
-                                // 第二个参数也为null，那直接结束这个class field的操作
-                                il.Emit(OpCodes.Br, endLabel);
-                            },
-                            // else
-                            () =>
-                            {
-                                // 第二个参数不为null，
-                                // 为第一个参数new一个class
-                                if(ilCtxList == null || ilCtxList.Count == 0)
+                if(!nowType.IsStructClass())
+                {
+                    il.GenIfThenElse(
+                        // if
+                        () =>
+                        {
+                            il.CompareWithNull(() => { RecursiveLoadParm0(ilCtxList, false); });
+                        },
+                        // then
+                        () =>
+                        {
+                            // 第一个参数 == null
+                            // 判断一下第二个参数是不是null
+                            il.GenIfThenElse(
+                                // if
+                                () =>
                                 {
-                                    // class 是 最顶层
-                                    if(ctxParm0ID == -1) 
-                                    {
-                                        il.GenUnityError("第一个参数为class，为null，而第二个参数不为null，没法为其拷贝。");
-                                        il.Emit(OpCodes.Br, lbRet);
-                                    }
-                                    else 
-                                    {
-                                        // 这里不需要创建，因为在上下文中应该为第一个参数new好了（或者说不会跑到）
-                                    }
-                                }
-                                else
+                                    il.CompareWithNull(() => { RecursiveLoadParm1(ilCtxList, false); });
+                                },
+                                // then
+                                () =>
                                 {
-                                    RecursiveLoadParm0(ilCtxList);
-                                    il.Emit(OpCodes.Newobj, ctor);
-
-                                    var lastItem = ilCtxList[ilCtxList.Count - 1];
-                                    // 如果最后一个上下文是Ldfld，那么说明不是List的内部成员
-                                    if (lastItem.opCodes == OpCodes.Ldfld)
-                                    {
-                                        il.Emit(OpCodes.Stfld, lastItem.fi);
-                                    }
-                                    // 是List成员
-                                    else if(lastItem.opCodes == OpCodes.Callvirt)
-                                    {
-                                        // set item
-                                        il.Emit(OpCodes.Callvirt, lastItem.miex);
-                                    }
-                                    // 进入正式逻辑
-                                    il.Emit(OpCodes.Br, beginLogicLabel);
-                                }
-                            });
-                    },
-                    // else
-                    () =>
-                    {
-                        // 第一个参数不为null
-                        // 判断一下第二个参数是不是null
-                        il.GenIfThenElse(
-                            // if
-                            () =>
-                            {
-                                il.CompareWithNull(() => { RecursiveLoadParm1(ilCtxList, false); });
-                            },
-                            // then
-                            () =>
-                            {
-                                // 第二个参数为null，那么把第一个参数变为null，然后结束
-                                if (ilCtxList == null || ilCtxList.Count == 0)
-                                {
-                                    // class 是 最顶层
-                                    if(ctxParm0ID == -1) 
-                                    {
-                                        il.GenUnityError("第一个参数为class，不为null，而第二个参数为null，没法为其拷贝。");
-                                        il.Emit(OpCodes.Br, lbRet);
-                                    }
-                                    else 
-                                    {
-                                        // 这里也不需要逻辑，因为这种情况在上下文处就应该处理完毕了，这里是不会跑到的
-                                    }
-                                }
-                                else
-                                {
-                                    RecursiveLoadParm0(ilCtxList);
-                                    il.Emit(OpCodes.Ldnull);
-
-                                    var lastItem = ilCtxList[ilCtxList.Count - 1];
-                                    // 如果最后一个上下文是Ldfld，那么说明不是List的内部成员
-                                    if (lastItem.opCodes == OpCodes.Ldfld)
-                                    {
-                                        il.Emit(OpCodes.Stfld, lastItem.fi);
-                                    }
-                                    // 是List成员
-                                    else if (lastItem.opCodes == OpCodes.Callvirt)
-                                    {
-                                        // set item
-                                        il.Emit(OpCodes.Callvirt, lastItem.miex);
-                                    }
-                                    // 把第一个参数变为null以后就可以结束了，因为null算是已经拷贝完了
+                                    // 第二个参数也为null，那直接结束这个class field的操作
                                     il.Emit(OpCodes.Br, endLabel);
-                                }
-                            },
-                            // else
-                            () =>
-                            {
-                                // 第二个参数不为null，那么往后执行即可
-                                il.Emit(OpCodes.Br, beginLogicLabel);
-                            });
-                    });
+                                },
+                                // else
+                                () =>
+                                {
+                                    // 第二个参数不为null，
+                                    // 为第一个参数new一个class
+                                    if(ilCtxList == null || ilCtxList.Count == 0)
+                                    {
+                                        // class 是 最顶层
+                                        if(ctxParm0ID == -1) 
+                                        {
+                                            il.GenUnityError("第一个参数为class，为null，而第二个参数不为null，没法为其拷贝。");
+                                            il.Emit(OpCodes.Br, lbRet);
+                                        }
+                                        else 
+                                        {
+                                            // 这里不需要创建，因为在上下文中应该为第一个参数new好了（或者说不会跑到）
+                                        }
+                                    }
+                                    else
+                                    {
+                                        RecursiveLoadParm0(ilCtxList);
+                                        il.Emit(OpCodes.Newobj, ctor);
+
+                                        var lastItem = ilCtxList[ilCtxList.Count - 1];
+                                        // 如果最后一个上下文是Ldfld，那么说明不是List的内部成员
+                                        if (lastItem.opCodes == OpCodes.Ldfld)
+                                        {
+                                            il.Emit(OpCodes.Stfld, lastItem.fi);
+                                        }
+                                        // 是List成员
+                                        else if(lastItem.opCodes == OpCodes.Callvirt)
+                                        {
+                                            // set item
+                                            il.Emit(OpCodes.Callvirt, lastItem.miex);
+                                        }
+                                        // 进入正式逻辑
+                                        il.Emit(OpCodes.Br, beginLogicLabel);
+                                    }
+                                });
+                        },
+                        // else
+                        () =>
+                        {
+                            // 第一个参数不为null
+                            // 判断一下第二个参数是不是null
+                            il.GenIfThenElse(
+                                // if
+                                () =>
+                                {
+                                    il.CompareWithNull(() => { RecursiveLoadParm1(ilCtxList, false); });
+                                },
+                                // then
+                                () =>
+                                {
+                                    // 第二个参数为null，那么把第一个参数变为null，然后结束
+                                    if (ilCtxList == null || ilCtxList.Count == 0)
+                                    {
+                                        // class 是 最顶层
+                                        if(ctxParm0ID == -1) 
+                                        {
+                                            il.GenUnityError("第一个参数为class，不为null，而第二个参数为null，没法为其拷贝。");
+                                            il.Emit(OpCodes.Br, lbRet);
+                                        }
+                                        else 
+                                        {
+                                            // 这里也不需要逻辑，因为这种情况在上下文处就应该处理完毕了，这里是不会跑到的
+                                        }
+                                    }
+                                    else
+                                    {
+                                        RecursiveLoadParm0(ilCtxList);
+                                        il.Emit(OpCodes.Ldnull);
+
+                                        var lastItem = ilCtxList[ilCtxList.Count - 1];
+                                        // 如果最后一个上下文是Ldfld，那么说明不是List的内部成员
+                                        if (lastItem.opCodes == OpCodes.Ldfld)
+                                        {
+                                            il.Emit(OpCodes.Stfld, lastItem.fi);
+                                        }
+                                        // 是List成员
+                                        else if (lastItem.opCodes == OpCodes.Callvirt)
+                                        {
+                                            // set item
+                                            il.Emit(OpCodes.Callvirt, lastItem.miex);
+                                        }
+                                        // 把第一个参数变为null以后就可以结束了，因为null算是已经拷贝完了
+                                        il.Emit(OpCodes.Br, endLabel);
+                                    }
+                                },
+                                // else
+                                () =>
+                                {
+                                    // 第二个参数不为null，那么往后执行即可
+                                    il.Emit(OpCodes.Br, beginLogicLabel);
+                                });
+                        });
+                }
 
                 il.MarkLabel(beginLogicLabel);
                 foreach (var field in nowType.GetFields(BindingFlags.Public | BindingFlags.Instance))
                 {
                     // Debug.Log(nowFi.Name + " 中的 " + field.Name);
-                    var ilCtxItem = new ILCtxItem(); ilCtxItem.opCodes = OpCodes.Ldfld; ilCtxItem.fi = field;
+                    var ilCtxItem = new ILCtxItem(); ilCtxItem.opCodes = field.FieldType.IsStructClass() ? OpCodes.Ldflda : OpCodes.Ldfld; ilCtxItem.fi = field;
                     ilCtxList.Add(ilCtxItem);
                     GenerateField(field.FieldType, ilCtxList);
                     ilCtxList.RemoveAt(ilCtxList.Count - 1);
@@ -1168,7 +1183,7 @@ namespace W3.TypeExtension
                         il.Emit(OpCodes.Ldc_I4_1);
                         il.Emit(OpCodes.Ceq);
                         // 第二个不是null，进入正式赋值阶段
-                        Debug.Log(" Brfalse " + beginSetLabel);
+                        // Debug.Log(" Brfalse " + beginSetLabel);
                         il.Emit(OpCodes.Brfalse, beginSetLabel);
                     }
 
@@ -1260,7 +1275,7 @@ namespace W3.TypeExtension
                                                 il.Emit(OpCodes.Ldc_I4_0);
                                             }
                                         }
-                                        else if(itemType.IsValueType) 
+                                        else if(itemType.IsStructClass()) 
                                         {
                                             // struct --> default(T)
                                             var idLocalStruct = localVarInt++;
@@ -1343,25 +1358,25 @@ namespace W3.TypeExtension
             {
                 if(nowType.IsList())
                 {
-                    Debug.Log(" IsListType " + nowType);
+                    // Debug.Log(" IsListType " + nowType);
                     GenerateList(nowType, ilCtxList);
                 }
                 // 基本类型
                 else if(nowType.IsBasicType() || nowType.IsEnum)
                 {
-                    Debug.Log(" IsBasicType " + nowType);
+                    // Debug.Log(" IsBasicType " + nowType);
                     GenerateStraightSetType(ilCtxList);
                 }
                 // Unity Type
                 else if(nowType.IsUnityType()) 
                 {
-                    Debug.Log(" Unity Type " + nowType);
+                    // Debug.Log(" Unity Type " + nowType);
                     GenerateStraightSetType(ilCtxList);
                 }
                 // 其他一些带有 op_Equality 的（例如string，Vector3）
                 else if(nowType.GetCurTypeOpEqualMethodInfoIncludeParent() != null)
                 {
-                    Debug.Log(" op_Equality ==== " + nowType);
+                    // Debug.Log(" op_Equality ==== " + nowType);
                     GenerateStraightSetType(ilCtxList);
                 }
                 // // 重写了 T Equal(T)
@@ -1372,7 +1387,7 @@ namespace W3.TypeExtension
                 // }
                 else // 递归生成
                 {
-                    Debug.Log(" 递归生成 " + nowType);
+                    // Debug.Log(" 递归生成 " + nowType);
                     // TODO.. 这里现在是给编辑器的序列化数据使用，所以class不会为null
                     GenerateClass(nowType, ilCtxList);
                 }
@@ -1393,6 +1408,7 @@ namespace W3.TypeExtension
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <returns></returns>
+        [Obsolete("由于这个方法总是需要new出一个新对象，所以建议使用 GetTypeCloneWithReturnAndTwoParms 作为替代。")]
         public static Func<T, T> GetTypeCloneWithReturn<T>()
         {
             Type type = typeof(T);
@@ -1423,7 +1439,7 @@ namespace W3.TypeExtension
                 LoadParm();
                 il.Emit(OpCodes.Stloc, idForRetAns);
             }
-            else if(type.IsValueType) 
+            else if(type.IsStructClass()) 
             {
                 // struct类型，不会为null --> default(T)
                 var idLocalStruct = localVarInt++;
@@ -1489,6 +1505,10 @@ namespace W3.TypeExtension
         /// 返回一个类型的深拷贝器，可以自动递归复制public的字段。
         /// 注意：暂不支持 List<List<T>>, T[][], Dictionary 类型。
         /// 这个方法类似 a = clone(a, b); 这样调用，来把b深拷贝给a
+        /// 调用端示例：
+        /// var clone = TypeUtility.GetTypeCloneWithReturnAndTwoParms<MyClass>();
+        /// MyClass a, b;
+        /// a = clone(a, b);
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <returns></returns>
@@ -1529,9 +1549,11 @@ namespace W3.TypeExtension
                 LoadParm1();
                 il.Emit(OpCodes.Stloc, idForRetAns);
             }
-            else if(type.IsValueType) 
+            else if(type.IsStructClass()) 
             {
                 // struct类型，不会为null
+                LoadParm0();
+                il.Emit(OpCodes.Stloc, idForRetAns);
                 GenCloneInner(il, type, ref localVarInt, idForRetAns, 2);
             }
             else if(type.IsList() || type.IsClass)
@@ -1639,7 +1661,7 @@ namespace W3.TypeExtension
                         il.Emit(OpCodes.Ldc_I4_0);
                     }
                 }
-                else if(type.IsValueType) 
+                else if(type.IsStructClass()) 
                 {
                     // struct --> default(T)
                     var idLocalStruct = localVarInt++;
