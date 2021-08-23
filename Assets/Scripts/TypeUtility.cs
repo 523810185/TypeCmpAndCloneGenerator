@@ -622,9 +622,6 @@ namespace W3.TypeExtension
                 il.Emit(OpCodes.Ret);
             }
 
-            // Type t = typeBuilder.CreateType();
-            // assemblyBuilder.Save("StudyOpCodes.dll"); 
-
             var cmp = dm.CreateDelegate(typeof(Func<T, T, bool>)) as Func<T, T, bool>;
             m_mapTypeCmpCache.Add(type, cmp);
             return cmp;
@@ -809,7 +806,7 @@ namespace W3.TypeExtension
                     // Set
                     var lastItem = ilCtxList[ilCtxList.Count - 1];
                     // 如果最后一个上下文是Ldfld，说明是为一个field赋值
-                    if(lastItem.opCodes == OpCodes.Ldfld) 
+                    if(lastItem.opCodes == OpCodes.Ldfld || lastItem.opCodes == OpCodes.Ldflda) 
                     {
                         MakeSetField(lastItem.fi);
                     }
@@ -817,6 +814,10 @@ namespace W3.TypeExtension
                     else if(lastItem.opCodes == OpCodes.Callvirt)
                     {
                         MakeSetItem(lastItem.mi, lastItem.miex);
+                    }
+                    else 
+                    {
+                        Debug.LogErrorFormat("GenerateStraightSetType 中 传入了无法解析的 OpCodes {0}。", lastItem.opCodes);
                     }
                 }
                 else 
